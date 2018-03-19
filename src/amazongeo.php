@@ -157,7 +157,7 @@ class AmazonGeo implements IAmazonGeo
 				`currencySymbolUtf8` as `geoplugin_currencySymbol_UTF8`,
 				`currencyConverter` as `geoplugin_curencyConverter`,
 				`amazonCountryExt`
-				FROM `wp_genesis_geo`
+				FROM `wp_amazon_geo`
 				WHERE `ip` = '%s'",
 			$ip
 		);
@@ -171,7 +171,7 @@ class AmazonGeo implements IAmazonGeo
 		if ( empty( $ip_data ) ) {
 			$ip_data = json_decode(file_get_contents('http://www.geoplugin.net/json.gp?ip=' . $ip));
 			// IP we haven't seen before, so let's save it to the database.
-			$sql = $amazondb->prepare( "INSERT IGNORE INTO `wp_genesis_geo` (
+			$sql = $amazondb->prepare( "INSERT IGNORE INTO `wp_amazon_geo` (
 						  `ip`, 
 						  `country`, 
 						  `countryCode`, 

@@ -1,6 +1,5 @@
 <?php
 
-
 namespace kdaviesnz\amazon;
 
 class AmazonCache implements IAmazonCache
@@ -55,39 +54,40 @@ class AmazonCache implements IAmazonCache
 
     public static function get_related_products($product, $relationshipType){
 
-        global $wpdb;
-        //$wpdb = new AmazonDB( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+        global $conn;
+        $amazondb = new AmazonDB($conn );
 
-        $related_products = get_transient('related' . $product->getAsin() );
+	    $transient = new Transient($conn);
+	    $related_products = $transient->fetch('related' . $product->getAsin() );
 
         if ( $related_products == false ) {
 
             $related_products = array();
             $relatedASINs = array();
 
-            $sql = $wpdb->prepare(
+            $sql = $amazondb->prepare(
                 "SELECT `relatedAIN` FROM `wp_amazon_related_products` 
             WHERE `AIN` = '%s' and `relationshipType`='%s'
             AND DATEDIFF( NOW(), `lastUpdated` ) < 7",
                 $product->getAsin(),
                 $relationshipType
             );
-            $records = $wpdb->get_results($sql);
-            if (!empty($wpdb->last_error)) {
-                echo $wpdb->last_error;
-                throw new \Exception($wpdb->last_error);
+            $records = $amazondb->get_results($sql);
+            if (!empty($amazondb->last_error)) {
+                echo $amazondb->last_error;
+                throw new \Exception($amazondb->last_error);
             }
             if (!empty($records)) {
                 foreach (AmazonCache::related_products_generator() as $relatedAIN) {
                     $relatedASINs[] = $relatedAIN;
                 }
-                $related_products = AmazonAmazonProductSearch::itemSearch(implode(',', $relatedASINs), $relationshipType);
+                $related_products = AmazonAmazonProductSearch::itemSearch(implode(',', $relatedASINs), 'ASIN', $relationshipType);
             } else {
                 throw new \Exception('No records found');
             }
 
             // Cache for 7 days.
-            set_transient('related_' . $product->getAsin(), $related_products, 3600 * 24 * 7);
+	        $transient->save('related_' . $product->getAsin(), $related_products, 3600 * 24 * 7);
 
         }
 
@@ -111,8 +111,8 @@ class AmazonCache implements IAmazonCache
         $amazondb = new AmazonDB($conn);
 
         // @todo
-       // $ancestors = get_transient('ancestors_' . $categoryID );
-	    $ancestors = false;
+	    $transient = new Transient($conn);
+	    $ancestors =$transient->fetch('ancestors_' . $categoryID );
 
         if ( empty($ancestors)) {
 
@@ -133,8 +133,7 @@ class AmazonCache implements IAmazonCache
                 }
             }
 
-            // @todo
-           // set_transient('ancestors_' . $categoryID, $ancestors, 3600 ); // Cache for one hour
+            $transient->save('ancestors_' . $categoryID, $ancestors, 3600 ); // Cache for one hour
         }
 
         return $ancestors;
@@ -184,23 +183,25 @@ class AmazonCache implements IAmazonCache
     private static function getChildLSI( $primary_word, $lsi, $depth )
     {
 
-        $lsi = get_transient('childlsi' . $primary_word);
+	    global $conn;
+
+	    $transient = new Transient($conn);
+	    $lsi = $transient->fetch('childlsi' . $primary_word);
 
         if ( empty( $lsi ) ) {
 
-            global $wpdb;
-            //$wpdb = new AmazonDB( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+            $amazondb = new AmazonDB( $conn );
 
             $lsi = array();
 
             $primary_word = str_replace(array('<b>', '</b>'), array('', ''), $primary_word);
 
-            $sql = $wpdb->prepare(
+            $sql = $amazondb->prepare(
                 "SELECT `lsi` FROM `wp_amazon_lsi` where `primary_word` = '%s' AND DATEDIFF( NOW(), `last_updated` ) < 30",
                 $primary_word
             );
 
-            $records = $wpdb->get_results($sql);
+            $records = $amazondb->get_results($sql);
             if ($depth < 3 && !empty($records)) {
                 foreach ($records as $record) {
                     $lsi[] = $record->lsi;
@@ -209,7 +210,7 @@ class AmazonCache implements IAmazonCache
             }
 
             // Cache for 30 days.
-            set_transient('childlsi' . $primary_word, $lsi, 3600 * 24 * 30);
+	        $transient->save('childlsi' . $primary_word, $lsi, 3600 * 24 * 30);
 
         }
 
@@ -218,25 +219,26 @@ class AmazonCache implements IAmazonCache
 
     public static function getLSI( $primary_word ) {
 
-        $lsi = get_transient('childlsi' . $primary_word);
+	    global $conn;
+	    $transient = new Transient($conn);
+	    $lsi = $transient->fetch('childlsi' . $primary_word);
 
         if ( empty($lsi) ) {
 
-            global $wpdb;
-            //$wpdb = new AmazonDB( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+            $amazondb = new AmazonDB( $conn );
 
             $lsi = array();
 
-            $sql = $wpdb->prepare(
+            $sql = $amazondb->prepare(
                 "SELECT `lsi` FROM `wp_amazon_lsi` where `primary_word` = '%s' AND DATEDIFF( NOW(), `last_updated` ) < 30",
                 $primary_word
             );
 
-            $records = $wpdb->get_results($sql);
+            $records = $amazondb->get_results($sql);
 
-            if (!empty($wpdb->last_error)) {
-                echo $wpdb->last_error;
-                throw new \Exception($wpdb->last_error);
+            if (!empty($amazondb->last_error)) {
+                echo $amazondb->last_error;
+                throw new \Exception($amazondb->last_error);
             }
 
             if (!empty($records)) {
@@ -247,7 +249,7 @@ class AmazonCache implements IAmazonCache
             }
             
             // Cache for 30 days.
-            set_transient('childlsi' . $primary_word, $lsi, 3600 * 24 * 30);
+	        $transient->save('childlsi' . $primary_word, $lsi, 3600 * 24 * 30);
 
         }
         
@@ -262,13 +264,12 @@ class AmazonCache implements IAmazonCache
      */
     public static function performCachedSearch($searchTerm, $searchType ) {
 
-    	// @todo
-//        $products = get_transient('search' . $searchTerm . $searchType);
-	    $products = false;
+	    global $conn;
+	    $transient = new Transient($conn);
+        $products = $transient->fetch('search' . $searchTerm . $searchType);
 
         if (empty($products)) {
 
-            global $conn;
             $amazondb = new AmazonDB( $conn);
 
             // Remove stale searches.
@@ -316,8 +317,7 @@ class AmazonCache implements IAmazonCache
             }
 
             // Cache for 1 days.
-	        // @todo
-           // set_transient('search' . $searchTerm . $searchType, $products, 3600 * 24 * 1);
+	        $transient->save('search' . $searchTerm . $searchType, $products, 3600 * 24 * 1);
 
         }
         
@@ -352,13 +352,12 @@ class AmazonCache implements IAmazonCache
 
     public static function getCategory( $categoryID )  {
 
-    	// @todo
-        // $amazonCategory = get_transient('category' . $categoryID);
-	    $amazonCategory = false;
+	    global $conn;
+	    $transient = new Transient($conn);
+	    $amazonCategory = $transient->fetch('category' . $categoryID);
 
         if (empty($amazonCategory)) {
 
-           global $conn;
            $amazondb = new AmazonDB( $conn );
 
             // Remove stale categories
@@ -397,8 +396,7 @@ class AmazonCache implements IAmazonCache
             );
 
             // Cache for 1 days.
-	        // @todo
-           // set_transient('category' . $categoryID, $amazonCategory, 3600 * 24 * 1);
+	        $transient->save('category' . $categoryID, $amazonCategory, 3600 * 24 * 1);
 
         }
 
@@ -510,13 +508,12 @@ class AmazonCache implements IAmazonCache
     public static function getProduct( $ain, $relationshipType = '' )  {
 
         // B00NQGP42Y
-	    // @todo
-       // $data = get_transient('product' . $ain);
-        $data = false;
+	    global $conn;
+	    $transient = new Transient($conn);
+	    $data = $transient->fetch('product' . $ain);
 
         if (empty($data)) {
 
-        	global $conn;
             $amazonDB = new AmazonDB($conn);
 
             $ain_string = implode("','", explode(',', $ain));
@@ -602,7 +599,7 @@ class AmazonCache implements IAmazonCache
                 if (!empty($records)) {
                     foreach ($records as $record) {
                         if ($ain != $record->frequentlyBoughtTogetherAIN) {
-                            //    $similar_product = AmazonProductSearch::itemSearch( $record->frequentlyBoughtTogetherAIN, '' );
+                            //    $similar_product = AmazonProductSearch::itemSearch( $record->frequentlyBoughtTogetherAIN, 'ASIN', '' );
                             $similar_product = new \stdClass();
                             $similar_product->ASIN = $record->frequentlyBoughtTogetherAIN;
                             $similar_product->Title = '';
@@ -812,8 +809,7 @@ class AmazonCache implements IAmazonCache
             $data = count($products) == 1 ? $products[0] : $products;
 
             // Cache for 1 days.
-	       // @todo
-//            set_transient('product' . $ain, $data, 3600 * 24 * 1);
+	        $transient->save('product' . $ain, $data, 3600 * 24 * 1);
         }
 
         return $data;
@@ -1303,13 +1299,13 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
 
     public static function getKeywords( $phrase, $rrf, $depth) {
 
-    	// @todo
-        //$data = get_transient('keywords' . $phrase . $rrf);
-	    $data = false;
+	    global $conn;
+
+	    $transient = new Transient($conn);
+	    $data = $transient->fetch('keywords' . $phrase . $rrf);
 
         if ($data == false) {
 
-            global $conn;
             $amazondb = new AmazonDB($conn);
 
             // Delete old records.
@@ -1361,8 +1357,7 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
             $data = array($phrase => $keyword);
 
             // Cache for 1 days.
-	        // @todo
-            // set_transient('keywords' . $phrase . $rrf, $data, 3600 * 24 * 1);
+	        $transient->save('keywords' . $phrase . $rrf, $data, 3600 * 24 * 1);
 
         }
 

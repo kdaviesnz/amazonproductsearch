@@ -217,11 +217,11 @@ class AmazonParser implements IAmazonParser
                     $merchant,
                     $warranty,
                     $image_sets,
-                    (float) $offers['Offer']->OfferListing->AmountSaved->FormattedPrice,
-                    (string) $offers['Offer']->OfferListing->Availability,
-                    (string) '0' == $offers['Offer']->OfferListing->IsEligibleForSuperSaverShipping ? 'Not available for free shipping' : 'Available for free shipping',
+                    !isset($offers['Offer']) ?null: (float) $offers['Offer']->OfferListing->AmountSaved->FormattedPrice,
+	                !isset($offers['Offer']) ?null:(string) $offers['Offer']->OfferListing->Availability,
+	                !isset($offers['Offer']) ?null:(string) '0' == $offers['Offer']->OfferListing->IsEligibleForSuperSaverShipping ? 'Not available for free shipping' : 'Available for free shipping',
                     (string) $item_links['All Customer Reviews'],
-                    (string) $item->EditorialReviews->EditorialReview->Content
+                    is_object($item->EditorialReviews) && is_object($item->EditorialReviews->EditorialReview) ? (string) $item->EditorialReviews->EditorialReview->Content:""
                 );
 
                 //var_dump('3');

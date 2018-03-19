@@ -164,12 +164,12 @@ class AmazonProductSearch implements IAmazonProductSearch
     }
 
 
-    public static function itemSearch( $asin, $relationshipType='', $endPoint = 'webservices.amazon.com', $uri = '/onca/xml' ) 
+    public static function itemSearch( $id, $idType, $relationshipType='', $endPoint = 'webservices.amazon.com', $uri = '/onca/xml' )
 	{
 
-		// @todo
-		// $search_results_xml = get_transient('itemsearchresultsxml' . $asin .  $relationshipType);
-		$search_results_xml = false;
+		global $conn;
+		$transient = new Transient($conn);
+		$search_results_xml = $transient->fetch('itemsearchresultsxml' . $id .  $relationshipType);
 
 		if ($search_results_xml != false) {
 			$parser = new AmazonParser();
@@ -183,7 +183,8 @@ class AmazonProductSearch implements IAmazonProductSearch
 		} else {
 
 			try {
-				$product = AmazonCache::getProduct($asin, $relationshipType);
+				$product = AmazonCache::getProduct($id, $relationshipType);
+				throw new \Exception("Just testing");
 			} catch (\Exception $e) {
 
 
@@ -215,12 +216,14 @@ class AmazonProductSearch implements IAmazonProductSearch
 				}
 
 				$lookup->setResponseGroup($groups);
-				$lookup->setItemId($asin);
+				$lookup->setIdType($idType);
+				$lookup->setItemId($id);
 
 				$search_results_xml = $apaiIO->runOperation($lookup);
-				//	header( 'Content-Type:application/xml' );
-				//		echo $search_results_xml;
-				//		die();
+				//header( 'Content-Type:application/xml' );
+
+				//echo $search_results_xml;
+				//die();
 				// Parse results.
 				$parser = new AmazonParser();
 				$results = $parser->parse_item_search_results($search_results_xml);
@@ -230,7 +233,7 @@ class AmazonProductSearch implements IAmazonProductSearch
 
 				AmazonCache::cacheProduct($product, $relationshipType, $related_products);
 
-				set_transient('itemsearchresultsxml' . $asin .  $relationshipType, $search_results_xml, 3600 * 24 * 1 ); // Cache for one days.
+				$transient->save('itemsearchresultsxml' . $id .  $relationshipType, $search_results_xml, 3600 * 24 * 1 ); // Cache for one days.
 
 			}
 

@@ -14,7 +14,10 @@ class AmazonKeywordsTool implements IAmazonKeywordsTool
 
 	public static function get_best_keywords() {
 
-		$keywords = set_transient('bestkeywords', 3600 * 24 * 7 );
+		global $conn;
+		$transient = new Transient($conn);
+
+		$keywords = $transient->fetch('bestkeywords', 3600 * 24 * 7 );
 
 		if ( $keywords === false ) {
 
@@ -34,8 +37,7 @@ class AmazonKeywordsTool implements IAmazonKeywordsTool
 				$keywords[] = AmazonCache::getKeywords($record->searchTerm, $record->rrf * 1.00);
 			}
 
-			// @todo
-			//set_transient('bestkeywords', 3600 * 24 * 7);
+			$transient->save('bestkeywords', 3600 * 24 * 7);
 
 		}
 

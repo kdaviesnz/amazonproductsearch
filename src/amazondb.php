@@ -107,6 +107,10 @@ class AmazonDB implements IAmazonDB {
 
 	public function get_row(String $query = "", $output = "OBJECT") {
 		$result = mysqli_query($this->conn, $query);
+		$this->last_error = mysqli_error($this->conn);
+		if (!empty($this->last_error)) {
+			throw new Exception($this->last_error . ": " . $query);
+		}
 		if ($output == "OBJECT") {
 			$row = mysqli_fetch_object($result);
 		} else {

@@ -19,6 +19,7 @@
     ],
     "require": {
         "php": "~7.0",
+        "cpigroup/php-amazon-mws": "1.4.2",
         "exeu/apai-io": "2.1.0"
     },
     "require-dev": {

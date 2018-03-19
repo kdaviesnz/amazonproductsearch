@@ -1881,5 +1881,46 @@
             "phpcs",
             "standards"
         ]
+    },
+    {
+        "name": "cpigroup/php-amazon-mws",
+        "version": "1.4.2",
+        "version_normalized": "1.4.2.0",
+        "source": {
+            "type": "git",
+            "url": "https://github.com/CPIGroup/phpAmazonMWS.git",
+            "reference": "bf594dcb60e3176ec69148e90bd9e618f41a85d3"
+        },
+        "dist": {
+            "type": "zip",
+            "url": "https://api.github.com/repos/CPIGroup/phpAmazonMWS/zipball/bf594dcb60e3176ec69148e90bd9e618f41a85d3",
+            "reference": "bf594dcb60e3176ec69148e90bd9e618f41a85d3",
+            "shasum": ""
+        },
+        "require": {
+            "ext-curl": "*",
+            "php": ">=5.4"
+        },
+        "require-dev": {
+            "phpunit/phpunit": ">=4.0.0, <6.0.0"
+        },
+        "time": "2018-03-07 21:21:11",
+        "type": "library",
+        "installation-source": "dist",
+        "autoload": {
+            "classmap": [
+                "includes/classes/"
+            ]
+        },
+        "notification-url": "https://packagist.org/downloads/",
+        "license": [
+            "Apache-2.0"
+        ],
+        "description": "An open-source library to connect to Amazon's MWS web services in an object-oriented manner, with a focus on intuitive usage.",
+        "keywords": [
+            "amazon",
+            "api",
+            "php"
+        ]
     }
 ]

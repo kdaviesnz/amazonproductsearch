@@ -30,6 +30,8 @@ include('src/iamazonkeyword.php');
 include('src/amazonkeyword.php');
 include('src/iamazongeo.php');
 include('src/amazongeo.php');
+include('src/itransient.php');
+include('src/transient.php');
 
 class AmazonProductSearchTest extends PHPUnit_Framework_TestCase {
 
@@ -52,10 +54,9 @@ class AmazonProductSearchTest extends PHPUnit_Framework_TestCase {
 
 		// Item test
 		$result = \kdaviesnz\amazon\AmazonProductSearch::itemSearch(
-			'B00136LUWW'
+			'B00136LUWW',
+			"ASIN"
 		);
-
-		var_dump($result);
 
 		$this->assertTrue( !empty( $result ), "true didn't end up being false!" );
 		$this->assertTrue( 'B00136LUWW' === $result->getAsin(), "Asin not set." );

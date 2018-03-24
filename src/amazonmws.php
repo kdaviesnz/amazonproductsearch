@@ -98,9 +98,6 @@ class AmazonMWS {
 			$t30daysSalesCount = array_reduce(
 				$data[$fields["currency"]],
 				function($carry, $item) {
-					if (empty($carry)) {
-						return $item["item-price"] * $item["quantity-purchased"];
-					}
 					$purchaseDate = new \DateTime($item["purchase-date"]);
 					$timeNow = new \DateTime();
 					$interval = $purchaseDate->diff($timeNow);

@@ -1,4 +1,11 @@
-
+-- phpMyAdmin SQL Dump
+-- version 4.7.9
+-- https://www.phpmyadmin.net/
+--
+-- Host: localhost
+-- Generation Time: Mar 24, 2018 at 06:09 PM
+-- Server version: 5.6.38
+-- PHP Version: 7.2.1
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET AUTOCOMMIT = 0;
@@ -11,7 +18,9 @@ SET time_zone = "+00:00";
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
 /*!40101 SET NAMES utf8mb4 */;
 
-
+--
+-- Database: `kdavies_jeffw`
+--
 
 -- --------------------------------------------------------
 
@@ -33,6 +42,9 @@ CREATE TABLE `wp_amazon_amazon_categories` (
 --
 
 CREATE TABLE `wp_amazon_amazon_products` (
+  `id` bigint(20) NOT NULL,
+  `keyType` varchar(10) NOT NULL,
+  `keyValue` varchar(100) NOT NULL,
   `AIN` varchar(20) NOT NULL,
   `title` varchar(100) NOT NULL,
   `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -74,7 +86,13 @@ CREATE TABLE `wp_amazon_amazon_products` (
   `availability` text NOT NULL,
   `freeShippingMessage` text NOT NULL,
   `customerReview` varchar(200) NOT NULL,
-  `editorialReview` varchar(200) NOT NULL
+  `editorialReview` varchar(200) NOT NULL,
+  `T30days` float DEFAULT NULL,
+  `T6months` float DEFAULT NULL,
+  `T12months` float DEFAULT NULL,
+  `T30daysSalesCount` int(11) DEFAULT NULL,
+  `T6monthsSalesCount` int(11) DEFAULT NULL,
+  `T12monthsSalesCount` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------
@@ -84,7 +102,7 @@ CREATE TABLE `wp_amazon_amazon_products` (
 --
 
 CREATE TABLE `wp_amazon_amazon_product_visits` (
-  `AIN` varchar(40) NOT NULL,
+  `keyValue` varchar(40) NOT NULL,
   `url` varchar(200) NOT NULL,
   `time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `amazon_country` varchar(100) NOT NULL,
@@ -133,7 +151,7 @@ CREATE TABLE `wp_amazon_geo` (
 --
 
 CREATE TABLE `wp_amazon_item_dimensions` (
-  `ain` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `width` int(11) NOT NULL,
   `height` int(11) NOT NULL,
   `depth` int(11) NOT NULL,
@@ -166,11 +184,24 @@ CREATE TABLE `wp_amazon_keywords_categories` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `wp_amazon_options`
+--
+
+CREATE TABLE `wp_amazon_options` (
+  `option_id` bigint(20) UNSIGNED NOT NULL,
+  `option_name` varchar(191) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `option_value` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `autoload` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'yes'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `wp_amazon_post_amazon_products`
 --
 
 CREATE TABLE `wp_amazon_post_amazon_products` (
-  `asin` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `post_id` bigint(20) NOT NULL,
   `campaignname` varchar(50) NOT NULL,
   `type` varchar(1) NOT NULL DEFAULT 'A',
@@ -189,7 +220,7 @@ CREATE TABLE `wp_amazon_post_amazon_products` (
 --
 
 CREATE TABLE `wp_amazon_product_categories` (
-  `AIN` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `categoryID` varchar(20) NOT NULL,
   `categoryName` varchar(50) NOT NULL,
   `RRF` float NOT NULL,
@@ -203,7 +234,7 @@ CREATE TABLE `wp_amazon_product_categories` (
 --
 
 CREATE TABLE `wp_amazon_product_features` (
-  `ain` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `feature` varchar(200) NOT NULL,
   `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -215,8 +246,8 @@ CREATE TABLE `wp_amazon_product_features` (
 --
 
 CREATE TABLE `wp_amazon_product_frequently_bought_together` (
-  `ain` varchar(20) NOT NULL,
-  `frequentlyBoughtTogetherAin` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
+  `frequentlyBoughtTogether` varchar(20) NOT NULL,
   `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -227,7 +258,7 @@ CREATE TABLE `wp_amazon_product_frequently_bought_together` (
 --
 
 CREATE TABLE `wp_amazon_product_images` (
-  `ain` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `src` varchar(200) NOT NULL,
   `height` int(11) NOT NULL,
   `width` int(11) NOT NULL,
@@ -242,7 +273,7 @@ CREATE TABLE `wp_amazon_product_images` (
 --
 
 CREATE TABLE `wp_amazon_product_image_sets` (
-  `AIN` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `type` varchar(10) NOT NULL,
   `height` int(11) NOT NULL,
   `width` int(11) NOT NULL,
@@ -257,7 +288,7 @@ CREATE TABLE `wp_amazon_product_image_sets` (
 --
 
 CREATE TABLE `wp_amazon_product_languages` (
-  `ain` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `language` varchar(50) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -268,7 +299,7 @@ CREATE TABLE `wp_amazon_product_languages` (
 --
 
 CREATE TABLE `wp_amazon_product_links` (
-  `ain` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `link` varchar(200) NOT NULL,
   `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -280,8 +311,8 @@ CREATE TABLE `wp_amazon_product_links` (
 --
 
 CREATE TABLE `wp_amazon_product_related_products` (
-  `ain` varchar(20) NOT NULL,
-  `relatedProductAIN` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
+  `relatedProduct` varchar(20) NOT NULL,
   `relationshipType` varchar(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -292,8 +323,8 @@ CREATE TABLE `wp_amazon_product_related_products` (
 --
 
 CREATE TABLE `wp_amazon_related_products` (
-  `AIN` varchar(20) NOT NULL,
-  `relatedAIN` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
+  `related` varchar(20) NOT NULL,
   `lastUpdated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `relationshipType` varchar(40) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -306,20 +337,12 @@ CREATE TABLE `wp_amazon_related_products` (
 
 CREATE TABLE `wp_amazon_search` (
   `searchTerm` varchar(200) NOT NULL,
-  `AIN` varchar(20) NOT NULL,
+  `keyValue` varchar(20) NOT NULL,
   `type` varchar(10) NOT NULL,
   `page` int(11) NOT NULL DEFAULT '1',
   `searchType` varchar(50) NOT NULL,
   `search_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-
-CREATE TABLE `wp_amazon_options` (
-  `option_id` bigint(20) UNSIGNED NOT NULL,
-  `option_name` varchar(191) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `option_value` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `autoload` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'yes'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Indexes for dumped tables
@@ -335,13 +358,13 @@ ALTER TABLE `wp_amazon_amazon_categories`
 -- Indexes for table `wp_amazon_amazon_products`
 --
 ALTER TABLE `wp_amazon_amazon_products`
-  ADD PRIMARY KEY (`AIN`);
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `wp_amazon_amazon_product_visits`
 --
 ALTER TABLE `wp_amazon_amazon_product_visits`
-  ADD PRIMARY KEY (`AIN`,`url`,`time`,`amazon_country`,`user_IP`);
+  ADD PRIMARY KEY (`keyValue`,`url`,`time`,`amazon_country`,`user_IP`);
 
 --
 -- Indexes for table `wp_amazon_categories_categories`
@@ -359,7 +382,7 @@ ALTER TABLE `wp_amazon_geo`
 -- Indexes for table `wp_amazon_item_dimensions`
 --
 ALTER TABLE `wp_amazon_item_dimensions`
-  ADD PRIMARY KEY (`ain`);
+  ADD PRIMARY KEY (`keyValue`);
 
 --
 -- Indexes for table `wp_amazon_keywords`
@@ -374,79 +397,87 @@ ALTER TABLE `wp_amazon_keywords_categories`
   ADD PRIMARY KEY (`phrase`,`category_name`);
 
 --
--- Indexes for table `wp_amazon_post_amazon_products`
---
-ALTER TABLE `wp_amazon_post_amazon_products`
-  ADD PRIMARY KEY (`asin`,`post_id`,`campaignname`);
-
---
--- Indexes for table `wp_amazon_product_categories`
---
-ALTER TABLE `wp_amazon_product_categories`
-  ADD PRIMARY KEY (`AIN`,`categoryID`);
-
---
--- Indexes for table `wp_amazon_product_features`
---
-ALTER TABLE `wp_amazon_product_features`
-  ADD PRIMARY KEY (`ain`,`feature`);
-
---
--- Indexes for table `wp_amazon_product_frequently_bought_together`
---
-ALTER TABLE `wp_amazon_product_frequently_bought_together`
-  ADD PRIMARY KEY (`ain`,`frequentlyBoughtTogetherAin`);
-
---
--- Indexes for table `wp_amazon_product_images`
---
-ALTER TABLE `wp_amazon_product_images`
-  ADD PRIMARY KEY (`ain`,`src`);
-
---
--- Indexes for table `wp_amazon_product_image_sets`
---
-ALTER TABLE `wp_amazon_product_image_sets`
-  ADD PRIMARY KEY (`AIN`,`type`);
-
---
--- Indexes for table `wp_amazon_product_languages`
---
-ALTER TABLE `wp_amazon_product_languages`
-  ADD PRIMARY KEY (`ain`,`language`);
-
---
--- Indexes for table `wp_amazon_product_links`
---
-ALTER TABLE `wp_amazon_product_links`
-  ADD PRIMARY KEY (`ain`,`link`);
-
---
--- Indexes for table `wp_amazon_product_related_products`
---
-ALTER TABLE `wp_amazon_product_related_products`
-  ADD PRIMARY KEY (`ain`,`relatedProductAIN`,`relationshipType`);
-
---
--- Indexes for table `wp_amazon_related_products`
---
-ALTER TABLE `wp_amazon_related_products`
-  ADD UNIQUE KEY `AIN` (`AIN`,`relatedAIN`,`relationshipType`);
-
---
--- Indexes for table `wp_amazon_search`
---
-ALTER TABLE `wp_amazon_search`
-  ADD PRIMARY KEY (`searchTerm`,`AIN`);
-COMMIT;
-
---
 -- Indexes for table `wp_amazon_options`
 --
 ALTER TABLE `wp_amazon_options`
   ADD PRIMARY KEY (`option_id`),
   ADD UNIQUE KEY `option_name` (`option_name`);
 
+--
+-- Indexes for table `wp_amazon_post_amazon_products`
+--
+ALTER TABLE `wp_amazon_post_amazon_products`
+  ADD PRIMARY KEY (`keyValue`,`post_id`,`campaignname`);
+
+--
+-- Indexes for table `wp_amazon_product_categories`
+--
+ALTER TABLE `wp_amazon_product_categories`
+  ADD PRIMARY KEY (`keyValue`,`categoryID`);
+
+--
+-- Indexes for table `wp_amazon_product_features`
+--
+ALTER TABLE `wp_amazon_product_features`
+  ADD PRIMARY KEY (`keyValue`,`feature`);
+
+--
+-- Indexes for table `wp_amazon_product_frequently_bought_together`
+--
+ALTER TABLE `wp_amazon_product_frequently_bought_together`
+  ADD PRIMARY KEY (`keyValue`,`frequentlyBoughtTogether`);
+
+--
+-- Indexes for table `wp_amazon_product_images`
+--
+ALTER TABLE `wp_amazon_product_images`
+  ADD PRIMARY KEY (`keyValue`,`src`);
+
+--
+-- Indexes for table `wp_amazon_product_image_sets`
+--
+ALTER TABLE `wp_amazon_product_image_sets`
+  ADD PRIMARY KEY (`keyValue`,`type`);
+
+--
+-- Indexes for table `wp_amazon_product_languages`
+--
+ALTER TABLE `wp_amazon_product_languages`
+  ADD PRIMARY KEY (`keyValue`,`language`);
+
+--
+-- Indexes for table `wp_amazon_product_links`
+--
+ALTER TABLE `wp_amazon_product_links`
+  ADD PRIMARY KEY (`keyValue`,`link`);
+
+--
+-- Indexes for table `wp_amazon_product_related_products`
+--
+ALTER TABLE `wp_amazon_product_related_products`
+  ADD PRIMARY KEY (`keyValue`,`relatedProduct`,`relationshipType`);
+
+--
+-- Indexes for table `wp_amazon_related_products`
+--
+ALTER TABLE `wp_amazon_related_products`
+  ADD UNIQUE KEY `AIN` (`keyValue`,`related`,`relationshipType`);
+
+--
+-- Indexes for table `wp_amazon_search`
+--
+ALTER TABLE `wp_amazon_search`
+  ADD PRIMARY KEY (`searchTerm`,`keyValue`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `wp_amazon_amazon_products`
+--
+ALTER TABLE `wp_amazon_amazon_products`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `wp_amazon_options`
@@ -454,7 +485,6 @@ ALTER TABLE `wp_amazon_options`
 ALTER TABLE `wp_amazon_options`
   MODIFY `option_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 COMMIT;
-
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;

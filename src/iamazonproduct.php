@@ -7,6 +7,22 @@ use ApaiIO\ApaiIO;
 
 interface IAmazonProduct
 {
+	public function getId():String;
+
+	public function getKeyType();
+	public function getKeyValue();
+	public function getDescription():String;
+    public function getUPCEAN():String;
+    public function getCompetitivePrice():float;
+    public function getNumberOfCompetitiveSellers():int;
+    public function get30Days():float;
+    public function get6Months():float;
+    public function get12months():float;
+    public function getCost():float;
+    public function getSoldByAmazon():bool;
+    public function getMarginPerc():float;
+	public function getMarginAmt():float;
+
     public function getAsin();
     public function getDetailPageURL();
     public function getItemLinks();
@@ -62,5 +78,7 @@ interface IAmazonProduct
     public function getCustomerReview();
     public function getEditorialReview();
     public function getCustomerReviewIFrame();
+
+    public function addSalesData(array $salesData):bool;
 
 }

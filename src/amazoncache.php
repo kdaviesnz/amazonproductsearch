@@ -284,7 +284,7 @@ class AmazonCache implements IAmazonCache
             }
 
             $sql = $amazondb->prepare(
-                "SELECT `searchTerm`, `AIN` FROM `wp_amazon_search` 
+                "SELECT `searchTerm`, `keyValue` FROM `wp_amazon_search` 
               WHERE `searchTerm` = '%s'
               AND `searchType` = '%s'
               AND DATEDIFF( NOW(), `search_date` )  < 1",
@@ -335,9 +335,9 @@ class AmazonCache implements IAmazonCache
         foreach( $products as $product ) {
 
             $sql = $amazondb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_search` (`searchTerm`, `AIN`, `searchType`) VALUES ('%s', '%s', '%s');",
+                "INSERT IGNORE INTO `wp_amazon_search` (`searchTerm`, `keyValue`, `searchType`) VALUES ('%s', '%s', '%s');",
                 $searchTerm,
-                $product->getAsin(),
+                $product->getKeyValue(),
                 $searchType
             );
 
@@ -505,21 +505,25 @@ class AmazonCache implements IAmazonCache
         return $rrfs;
     }
 
-    public static function getProduct( $ain, $relationshipType = '' )  {
+    public static function getProduct( $keyValue, $relationshipType = '' )  {
 
         // B00NQGP42Y
 	    global $conn;
 	    $transient = new Transient($conn);
-	    $data = $transient->fetch('product' . $ain);
+	    $data = $transient->fetch('product' . $keyValue);
+
 
         if (empty($data)) {
 
             $amazonDB = new AmazonDB($conn);
 
-            $ain_string = implode("','", explode(',', $ain));
+            $keyValue_string = implode("','", explode(',', $keyValue));
 
             $sql = $amazonDB->prepare(
                 "SELECT
+				`id`,
+				`keyType`,
+				`keyValue`,
                 `AIN`, 
                 `title`, 
                 `last_updated`, 
@@ -562,7 +566,7 @@ class AmazonCache implements IAmazonCache
                  `customerReview`,
                  `editorialReview`
                   FROM `wp_amazon_amazon_products`
-                  WHERE `ain` IN ('$ain_string')
+                  WHERE `keyValue` IN ('$keyValue_string')
                   AND DATEDIFF(NOW(), `last_updated`)  < 1
                   AND `avgRRF` > -1",
                 '');
@@ -577,7 +581,7 @@ class AmazonCache implements IAmazonCache
             }
 
             if (empty($records)) {
-                throw new \Exception('Product not found when searching cache - ' . $ain_string);
+                throw new \Exception('Product not found when searching cache - ' . $keyValue_string);
             }
 
             $products = array();
@@ -588,8 +592,8 @@ class AmazonCache implements IAmazonCache
 
 
                 $sql = $amazonDB->prepare(
-                    "SELECT `frequentlyBoughtTogetherAIN` FROM `wp_amazon_product_frequently_bought_together` where `ain` = '%s' AND `ain` <> `frequentlyBoughtTogetherAIN`",
-                    $ain
+                    "SELECT `frequentlyBoughtTogether` FROM `wp_amazon_product_frequently_bought_together` where `keyValue` = '%s' AND `keyValue` <> `frequentlyBoughtTogether`",
+                    $keyValue
                 );
                 $records = $amazonDB->get_results($sql);
                 if (!empty($amazonDB->last_error)) {
@@ -598,10 +602,10 @@ class AmazonCache implements IAmazonCache
                 }
                 if (!empty($records)) {
                     foreach ($records as $record) {
-                        if ($ain != $record->frequentlyBoughtTogetherAIN) {
+                        if ($keyValue != $record->frequentlyBoughtTogether) {
                             //    $similar_product = AmazonProductSearch::itemSearch( $record->frequentlyBoughtTogetherAIN, 'ASIN', '' );
                             $similar_product = new \stdClass();
-                            $similar_product->ASIN = $record->frequentlyBoughtTogetherAIN;
+                            $similar_product->keyValue = $record->frequentlyBoughtTogether;
                             $similar_product->Title = '';
                             $similar_products[] = $similar_product;
                         }
@@ -612,13 +616,13 @@ class AmazonCache implements IAmazonCache
                 $rrfs = array();
 
                 $sql = $amazonDB->prepare(
-                    "SELECT `wp_amazon_product_categories`.`categoryID`, `wp_amazon_product_categories`.`categoryName`, `wp_amazon_product_categories`.`RRF`, `wp_amazon_amazon_categories`.`number_items` FROM `wp_amazon_product_categories`, `wp_amazon_amazon_categories` WHERE `ain` = '%s' AND `wp_amazon_product_categories`.`categoryID` = `wp_amazon_amazon_categories`.`category_id`",
-                    $ain
+                    "SELECT `wp_amazon_product_categories`.`categoryID`, `wp_amazon_product_categories`.`categoryName`, `wp_amazon_product_categories`.`RRF`, `wp_amazon_amazon_categories`.`number_items` FROM `wp_amazon_product_categories`, `wp_amazon_amazon_categories` WHERE `keyValue` = '%s' AND `wp_amazon_product_categories`.`categoryID` = `wp_amazon_amazon_categories`.`category_id`",
+                    $keyValue
                 );
                 $records = $amazonDB->get_results($sql);
                 if (!empty($amazonDB->last_error)) {
                     echo $amazonDB->last_error;
-                    throw new \Exception($wpdb->last_error);
+                    throw new \Exception($amazonDB->last_error);
                 }
                 if (!empty($records)) {
                     foreach ($records as $record) {
@@ -644,13 +648,13 @@ class AmazonCache implements IAmazonCache
 
                 $item_links = array();
                 $sql = $amazonDB->prepare(
-                    "SELECT `link` FROM `wp_amazon_product_links` where `ain` = '%s'",
-                    $ain
+                    "SELECT `link` FROM `wp_amazon_product_links` where `keyValue` = '%s'",
+                    $keyValue
                 );
                 $records = $amazonDB->get_results($sql);
                 if (!empty($amazonDB->last_error)) {
                     echo $amazonDB->last_error;
-                    throw new \Exception($wpdb->last_error);
+                    throw new \Exception($amazonDB->last_error);
                 }
                 if (!empty($records)) {
                     foreach ($records as $record) {
@@ -660,13 +664,13 @@ class AmazonCache implements IAmazonCache
 
                 $languages = array();
                 $sql = $amazonDB->prepare(
-                    "SELECT `language` FROM `wp_amazon_product_languages` where `ain` = '%s'",
-                    $ain
+                    "SELECT `language` FROM `wp_amazon_product_languages` where `keyValue` = '%s'",
+                    $keyValue
                 );
                 $records = $amazonDB->get_results($sql);
                 if (!empty($amazonDB->last_error)) {
                     echo $amazonDB->last_error;
-                    throw new \Exception($wpdb->last_error);
+                    throw new \Exception($amazonDB->last_error);
                 }
                 if (!empty($records)) {
                     foreach ($records as $record) {
@@ -676,13 +680,13 @@ class AmazonCache implements IAmazonCache
 
                 $images = array();
                 $sql = $amazonDB->prepare(
-                    "SELECT `src`, `height`, `width`, `type` FROM `wp_amazon_product_images` where `ain` = '%s'",
-                    $ain
+                    "SELECT `src`, `height`, `width`, `type` FROM `wp_amazon_product_images` where `keyValue` = '%s'",
+                    $keyValue
                 );
                 $records = $amazonDB->get_results($sql);
                 if (!empty($amazonDB->last_error)) {
                     echo $amazonDB->last_error;
-                    throw new \Exception($wpdb->last_error);
+                    throw new \Exception($amazonDB->last_error);
                 }
                 if (!empty($records)) {
                     foreach ($records as $record) {
@@ -696,13 +700,13 @@ class AmazonCache implements IAmazonCache
 
                 $features = array();
                 $sql = $amazonDB->prepare(
-                    "SELECT `feature` FROM `wp_amazon_product_features` where `ain` = '%s'",
-                    $ain
+                    "SELECT `feature` FROM `wp_amazon_product_features` where `keyValue` = '%s'",
+                    $keyValue
                 );
                 $records = $amazonDB->get_results($sql);
                 if (!empty($amazonDB->last_error)) {
                     echo $amazonDB->last_error;
-                    throw new \Exception($wpdb->last_error);
+                    throw new \Exception($amazonDB->last_error);
                 }
                 if (!empty($records)) {
                     foreach ($records as $record) {
@@ -712,8 +716,8 @@ class AmazonCache implements IAmazonCache
 
                 $dimensions = array();
                 $sql = $amazonDB->prepare(
-                    "SELECT `width`, `height`, `depth`, `weight` FROM `wp_amazon_item_dimensions` where `ain` = '%s'",
-                    $ain
+                    "SELECT `width`, `height`, `depth`, `weight` FROM `wp_amazon_item_dimensions` where `keyValue` = '%s'",
+                    $keyValue
                 );
                 $record = $amazonDB->get_row($sql);
                 if (!empty($amazonDB->last_error)) {
@@ -729,13 +733,13 @@ class AmazonCache implements IAmazonCache
 
                 $image_sets = array();
                 $sql = $amazonDB->prepare(
-                    "SELECT `AIN`, `type`, `height`, `width`, `url` FROM `wp_amazon_product_image_sets` where `AIN` = '%s'",
-                    $ain
+                    "SELECT `keyValue`, `type`, `height`, `width`, `url` FROM `wp_amazon_product_image_sets` where `keyValue` = '%s'",
+                    $keyValue
                 );
                 $records = $amazonDB->get_results($sql);
                 if (!empty($amazonDB->last_error)) {
                     echo $amazonDB->last_error;
-                    throw new \Exception($wpdb->last_error);
+                    throw new \Exception($amazonDB->last_error);
                 }
                 if (!empty($records)) {
                     foreach ($records as $record) {
@@ -751,6 +755,9 @@ class AmazonCache implements IAmazonCache
 
 
                 $product = new AmazonProduct(
+	                $product_record->id,
+                    $product_record->keyType,
+	                $product_record->keyValue,
                     (string)$product_record->AIN,
                     (string)$product_record->detailPageURL,
                     $item_links,
@@ -809,7 +816,7 @@ class AmazonCache implements IAmazonCache
             $data = count($products) == 1 ? $products[0] : $products;
 
             // Cache for 1 days.
-	        $transient->save('product' . $ain, $data, 3600 * 24 * 1);
+	        $transient->save('product' . $keyValue, $data, 3600 * 24 * 1);
         }
 
         return $data;
@@ -822,10 +829,18 @@ class AmazonCache implements IAmazonCache
         global $conn;
         $amazondb = new AmazonDB($conn);
 
-        $sql = $amazondb->prepare(
-            "INSERT INTO `wp_amazon_amazon_products` (`AIN`, `title`, `last_updated`, `detailPageURL`, `salesRank`, `author`, `brand`, `department`, `color`, `ean`, `feature`, `genre`, `isAdultProduct`, `isAutographed`, `isMemorabilia`, `label`, `publisher`, `listPriceAmount`, `listPriceCurrencyCode`, `listPriceFormattedPrice`, `manufacturer`, `productGroup`, `productTypeName`, `lowestNewPriceAmount`, `lowestNewPriceCurrencyCode`, `lowestNewPriceFormattedPrice`, `lowestUsedPriceAmount`, `lowestUsedPriceCurrencyCode`, `lowestUsedPriceFormattedPrice`, `lowestCollectiblePriceAmount`, `lowestCollectiblePriceCurrencyCode`, `lowestCollectiblePriceFormattedPrice`, `binding`,
-`avgRRF`, `mpn`, `merchant`, `warranty`, `amountSaved`, `availability`, `freeShippingMessage`, `customerReview`, `editorialReview`) VALUES ('%s', '%s', CURRENT_TIMESTAMP, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
-            ON DUPLICATE KEY UPDATE
+        // Search for matching product.
+	    $keyTypeSafe = mysqli_real_escape_string($conn, $product->getKeyType());
+	    $keyValueSafe = mysqli_real_escape_string($conn, $product->getKeyValue());
+
+	    $sql = "SELECT `id` FROM `wp_amazon_amazon_products` WHERE `keyValue` = '$keyValueSafe' AND `keyType` = '$keyTypeSafe'";
+
+	    $results = $amazondb->get_results($sql);
+
+	    if (!empty($results)) {
+	    	$id = $results[0]->id;
+		    $sql = $amazondb->prepare(
+			    "UPDATE `wp_amazon_amazon_products` SET			    
             `title` = '%s', 
             `last_updated` = CURRENT_TIMESTAMP, 
             `detailPageURL` = '%s', 
@@ -866,94 +881,188 @@ class AmazonCache implements IAmazonCache
             `availability` = '%s',
             `freeShippingMessage` = '%s',
             `customerReview` = '%s',
-            `editorialReview` = '%s'",
-            $product->getAsin(),
-            $product->getTitle(),
-            $product->getDetailPageURL(),
-            $product->getSalesRank(),
-            $product->getAuthor(),
-            $product->getBrand(),
-            $product->getDepartment(),
-            $product->getColor(),
-            $product->getEAN(),
-            '',
-            $product->getGenre(),
-            $product->isIsAdultProduct(),
-            $product->isIsAutographed(),
-            $product->isIsMemorabilia(),
-            $product->getLabel(),
-            $product->getPublisher(),
-            $product->getListPriceAmount(),
-            $product->getListPriceCurrencyCode(),
-            $product->getListPriceFormattedPrice(),
-            $product->getManufacturer(),
-            $product->getProductGroup(),
-            $product->getProductTypeName(),
-            $product->getLowestNewPriceAmount(),
-            $product->getLowestCollectiblePriceCurrencyCode(),
-            $product->getLowestNewPriceFormattedPrice(),
-            $product->getLowestUsedPriceAmount(),
-            $product->getLowestUsedPriceCurrencyCode(),
-            $product->getLowestUsedPriceFormattedPrice(),
-            $product->getLowestCollectiblePriceAmount(),
-            $product->getLowestCollectiblePriceCurrencyCode(),
-            $product->getLowestCollectiblePriceFormattedPrice(),
-            $product->getType(),
-            $product->getAvgRRF(),
-            $product->getMpn(),
-            $product->getMerchant(),
-            $product->getWarranty(),
+            `editorialReview` = '%s' WHERE `id` = '$id'",
+			    $product->getAsin(),
+			    $product->getTitle(),
+			    $product->getDetailPageURL(),
+			    $product->getSalesRank(),
+			    $product->getAuthor(),
+			    $product->getBrand(),
+			    $product->getDepartment(),
+			    $product->getColor(),
+			    $product->getEAN(),
+			    '',
+			    $product->getGenre(),
+			    $product->isIsAdultProduct(),
+			    $product->isIsAutographed(),
+			    $product->isIsMemorabilia(),
+			    $product->getLabel(),
+			    $product->getPublisher(),
+			    $product->getListPriceAmount(),
+			    $product->getListPriceCurrencyCode(),
+			    $product->getListPriceFormattedPrice(),
+			    $product->getManufacturer(),
+			    $product->getProductGroup(),
+			    $product->getProductTypeName(),
+			    $product->getLowestNewPriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestNewPriceFormattedPrice(),
+			    $product->getLowestUsedPriceAmount(),
+			    $product->getLowestUsedPriceCurrencyCode(),
+			    $product->getLowestUsedPriceFormattedPrice(),
+			    $product->getLowestCollectiblePriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestCollectiblePriceFormattedPrice(),
+			    $product->getType(),
+			    $product->getAvgRRF(),
+			    $product->getMpn(),
+			    $product->getMerchant(),
+			    $product->getWarranty(),
 
-            $product->getTitle(),
-            $product->getDetailPageURL(),
-            $product->getSalesRank(),
-            $product->getAuthor(),
-            $product->getBrand(),
-            $product->getDepartment(),
-            $product->getColor(),
-            $product->getEAN(),
-            '',
-            $product->getGenre(),
-            $product->isIsAdultProduct(),
-            $product->isIsAutographed(),
-            $product->isIsMemorabilia(),
-            $product->getLabel(),
-            $product->getPublisher(),
-            $product->getListPriceAmount(),
-            $product->getListPriceCurrencyCode(),
-            $product->getListPriceFormattedPrice(),
-            $product->getManufacturer(),
-            $product->getProductGroup(),
-            $product->getProductTypeName(),
-            $product->getLowestNewPriceAmount(),
-            $product->getLowestCollectiblePriceCurrencyCode(),
-            $product->getLowestNewPriceFormattedPrice(),
-            $product->getLowestUsedPriceAmount(),
-            $product->getLowestUsedPriceCurrencyCode(),
-            $product->getLowestUsedPriceFormattedPrice(),
-            $product->getLowestCollectiblePriceAmount(),
-            $product->getLowestCollectiblePriceCurrencyCode(),
-            $product->getLowestCollectiblePriceFormattedPrice(),
-            $product->getType(),
-            (float) $product->getAvgRRF(),
-            $product->getMpn(),
-            $product->getMerchant(),
-            $product->getWarranty(),
-            
-            $product->getAmountSaved(),
-            $product->getAvailability(),
-            $product->getFreeShippingMessage(),
-            $product->getCustomerReview(),
-            $product->getEditorialReview(),
+			    $product->getTitle(),
+			    $product->getDetailPageURL(),
+			    $product->getSalesRank(),
+			    $product->getAuthor(),
+			    $product->getBrand(),
+			    $product->getDepartment(),
+			    $product->getColor(),
+			    $product->getEAN(),
+			    '',
+			    $product->getGenre(),
+			    $product->isIsAdultProduct(),
+			    $product->isIsAutographed(),
+			    $product->isIsMemorabilia(),
+			    $product->getLabel(),
+			    $product->getPublisher(),
+			    $product->getListPriceAmount(),
+			    $product->getListPriceCurrencyCode(),
+			    $product->getListPriceFormattedPrice(),
+			    $product->getManufacturer(),
+			    $product->getProductGroup(),
+			    $product->getProductTypeName(),
+			    $product->getLowestNewPriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestNewPriceFormattedPrice(),
+			    $product->getLowestUsedPriceAmount(),
+			    $product->getLowestUsedPriceCurrencyCode(),
+			    $product->getLowestUsedPriceFormattedPrice(),
+			    $product->getLowestCollectiblePriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestCollectiblePriceFormattedPrice(),
+			    $product->getType(),
+			    (float) $product->getAvgRRF(),
+			    $product->getMpn(),
+			    $product->getMerchant(),
+			    $product->getWarranty(),
 
-            $product->getAmountSaved(),
-            $product->getAvailability(),
-            $product->getFreeShippingMessage(),
-            $product->getCustomerReview(),
-            $product->getEditorialReview()
-            
-        );
+			    $product->getAmountSaved(),
+			    $product->getAvailability(),
+			    $product->getFreeShippingMessage(),
+			    $product->getCustomerReview(),
+			    $product->getEditorialReview(),
 
+			    $product->getAmountSaved(),
+			    $product->getAvailability(),
+			    $product->getFreeShippingMessage(),
+			    $product->getCustomerReview(),
+			    $product->getEditorialReview()
+
+		    );
+
+	    } else {
+		    $sql = $amazondb->prepare(
+			    "INSERT INTO `wp_amazon_amazon_products` (`keyType`, `keyValue`, `AIN`, `title`, `last_updated`, `detailPageURL`, `salesRank`, `author`, `brand`, `department`, `color`, `ean`, `feature`, `genre`, `isAdultProduct`, `isAutographed`, `isMemorabilia`, `label`, `publisher`, `listPriceAmount`, `listPriceCurrencyCode`, `listPriceFormattedPrice`, `manufacturer`, `productGroup`, `productTypeName`, `lowestNewPriceAmount`, `lowestNewPriceCurrencyCode`, `lowestNewPriceFormattedPrice`, `lowestUsedPriceAmount`, `lowestUsedPriceCurrencyCode`, `lowestUsedPriceFormattedPrice`, `lowestCollectiblePriceAmount`, `lowestCollectiblePriceCurrencyCode`, `lowestCollectiblePriceFormattedPrice`, `binding`,
+`avgRRF`, `mpn`, `merchant`, `warranty`, `amountSaved`, `availability`, `freeShippingMessage`, `customerReview`, `editorialReview`) VALUES ('%s', '%s', '%s', '%s', CURRENT_TIMESTAMP, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')",
+			    $keyTypeSafe,
+			    $keyValueSafe,
+			    $product->getAsin(),
+			    $product->getTitle(),
+			    $product->getDetailPageURL(),
+			    $product->getSalesRank(),
+			    $product->getAuthor(),
+			    $product->getBrand(),
+			    $product->getDepartment(),
+			    $product->getColor(),
+			    $product->getEAN(),
+			    '',
+			    $product->getGenre(),
+			    $product->isIsAdultProduct(),
+			    $product->isIsAutographed(),
+			    $product->isIsMemorabilia(),
+			    $product->getLabel(),
+			    $product->getPublisher(),
+			    $product->getListPriceAmount(),
+			    $product->getListPriceCurrencyCode(),
+			    $product->getListPriceFormattedPrice(),
+			    $product->getManufacturer(),
+			    $product->getProductGroup(),
+			    $product->getProductTypeName(),
+			    $product->getLowestNewPriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestNewPriceFormattedPrice(),
+			    $product->getLowestUsedPriceAmount(),
+			    $product->getLowestUsedPriceCurrencyCode(),
+			    $product->getLowestUsedPriceFormattedPrice(),
+			    $product->getLowestCollectiblePriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestCollectiblePriceFormattedPrice(),
+			    $product->getType(),
+			    $product->getAvgRRF(),
+			    $product->getMpn(),
+			    $product->getMerchant(),
+			    $product->getWarranty(),
+
+			    $product->getTitle(),
+			    $product->getDetailPageURL(),
+			    $product->getSalesRank(),
+			    $product->getAuthor(),
+			    $product->getBrand(),
+			    $product->getDepartment(),
+			    $product->getColor(),
+			    $product->getEAN(),
+			    '',
+			    $product->getGenre(),
+			    $product->isIsAdultProduct(),
+			    $product->isIsAutographed(),
+			    $product->isIsMemorabilia(),
+			    $product->getLabel(),
+			    $product->getPublisher(),
+			    $product->getListPriceAmount(),
+			    $product->getListPriceCurrencyCode(),
+			    $product->getListPriceFormattedPrice(),
+			    $product->getManufacturer(),
+			    $product->getProductGroup(),
+			    $product->getProductTypeName(),
+			    $product->getLowestNewPriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestNewPriceFormattedPrice(),
+			    $product->getLowestUsedPriceAmount(),
+			    $product->getLowestUsedPriceCurrencyCode(),
+			    $product->getLowestUsedPriceFormattedPrice(),
+			    $product->getLowestCollectiblePriceAmount(),
+			    $product->getLowestCollectiblePriceCurrencyCode(),
+			    $product->getLowestCollectiblePriceFormattedPrice(),
+			    $product->getType(),
+			    (float) $product->getAvgRRF(),
+			    $product->getMpn(),
+			    $product->getMerchant(),
+			    $product->getWarranty(),
+
+			    $product->getAmountSaved(),
+			    $product->getAvailability(),
+			    $product->getFreeShippingMessage(),
+			    $product->getCustomerReview(),
+			    $product->getEditorialReview(),
+
+			    $product->getAmountSaved(),
+			    $product->getAvailability(),
+			    $product->getFreeShippingMessage(),
+			    $product->getCustomerReview(),
+			    $product->getEditorialReview()
+
+		    );
+
+	    }
 
 	    $amazondb->query( $sql );
         if ( ! empty( $amazondb->last_error ) ) {
@@ -975,9 +1084,9 @@ class AmazonCache implements IAmazonCache
         }
         foreach( $product_links as $link ) {
             $sql = $amazondb->prepare(
-                "INSERT INTO `wp_amazon_product_links` (`ain`, `link`) VALUES ('%s', '%s')
+                "INSERT INTO `wp_amazon_product_links` (`keyValue`, `link`) VALUES ('%s', '%s')
                   ON DUPLICATE KEY UPDATE `link` = '%s';",
-                $product->getAsin(),
+                $product->getKeyValue(),
                 $link,
                 $link
             );
@@ -991,8 +1100,8 @@ class AmazonCache implements IAmazonCache
         $languages = $product->getLanguages();
         foreach( $languages as $language ) {
             $sql = $amazondb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_product_languages` (`ain`, `language`) VALUES ('%s', '%s');",
-                $product->getAsin(),
+                "INSERT IGNORE INTO `wp_amazon_product_languages` (`keyValue`, `language`) VALUES ('%s', '%s');",
+                $product->getKeyValue(),
                 (string) is_object($language)?$language->Name:"Unknown"
             );
 	        $amazondb->query( $sql );
@@ -1006,8 +1115,8 @@ class AmazonCache implements IAmazonCache
             //$related_products = $product->related_products($relationshipType);
             foreach ($related_products as $related_product) {
                 $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_related_products` (`ain`, `relatedProductAIN`, `relationshipType`) VALUES ('%s', '%s', '%s');",
-                    $product->getAsin(),
+                    "INSERT INTO `wp_amazon_product_related_products` (`keyValue`, `relatedProductAIN`, `relationshipType`) VALUES ('%s', '%s', '%s');",
+                    $product->getKeyValue(),
                     $related_product->getAsin(),
                     $relationshipType
                 );
@@ -1035,9 +1144,9 @@ class AmazonCache implements IAmazonCache
         }
         foreach( $frequently_bought_together as $frequently_bought_together_product ) {
             $sql = $amazondb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_product_frequently_bought_together` (`ain`, `frequentlyBoughtTogetherAin`) VALUES ('%s', '%s');",
-                $product->getAsin(),
-                (string) $frequently_bought_together_product->ASIN
+                "INSERT IGNORE INTO `wp_amazon_product_frequently_bought_together` (`keyValue`, `frequentlyBoughtTogether`) VALUES ('%s', '%s');",
+                $product->getKeyValue(),
+                (string) $frequently_bought_together_product->keyValue
             );
 	        $amazondb->query( $sql );
             if ( ! empty( $amazondb->last_error ) ) {
@@ -1060,10 +1169,10 @@ class AmazonCache implements IAmazonCache
         }
         foreach( $images as $type=>$image ) {
             $sql = $amazondb->prepare(
-                "INSERT INTO `wp_amazon_product_images` (`type`, `ain`, `src`, `height`, `width`) VALUES ('%s', '%s', '%s', '%s', '%s')
+                "INSERT INTO `wp_amazon_product_images` (`type`, `keyValue`, `src`, `height`, `width`) VALUES ('%s', '%s', '%s', '%s', '%s')
  ON DUPLICATE KEY UPDATE `type` = '%s', `src`='%s', `height`='%s', `width`='%s';",
                 $type,
-                $product->getAsin(),
+                $product->getKeyValue(),
                 (string) isset($image['src'])?$image['src']:$image['url'],
                 (int) $image['height'],
                 (int) $image['width'],
@@ -1092,9 +1201,9 @@ class AmazonCache implements IAmazonCache
         }
         foreach( $features as $feature ) {
             $sql = $amazondb->prepare(
-                "INSERT INTO `wp_amazon_product_features` (`ain`, `feature`) VALUES ('%s', '%s')
+                "INSERT INTO `wp_amazon_product_features` (`keyValue`, `feature`) VALUES ('%s', '%s')
  ON DUPLICATE KEY UPDATE `feature` = '%s';",
-                $product->getAsin(),
+                $product->getKeyValue(),
                 $feature,
                 $feature
             );
@@ -1118,8 +1227,8 @@ class AmazonCache implements IAmazonCache
 
 
         $sql = $amazondb->prepare(
-            "INSERT IGNORE INTO `wp_amazon_item_dimensions` (`ain`, `width`, `height`, `depth`, `weight`) VALUES ('%s', '%s', '%s', '%s', '%s');",
-            $product->getAsin(),
+            "INSERT IGNORE INTO `wp_amazon_item_dimensions` (`keyValue`, `width`, `height`, `depth`, `weight`) VALUES ('%s', '%s', '%s', '%s', '%s');",
+            $product->getKeyValue(),
 	        isset($dimensions['Width'])?$dimensions['Width']:'',
 	        isset($dimensions['Height'])?$dimensions['Height']:'',
 	        isset($dimensions['Length'])?$dimensions['Length']:'',
@@ -1145,9 +1254,9 @@ class AmazonCache implements IAmazonCache
         foreach( $categories as $category ) {
             $sql = $amazondb->prepare(
                 "INSERT IGNORE INTO `wp_amazon_product_categories` 
-              (`AIN`, `categoryID`, `RRF`)
+              (`keyValue`, `categoryID`, `RRF`)
                VALUES ('%s', '%s', '%s' );",
-                $product->getAsin(),
+                $product->getKeyValue(),
                 $category->get_category_id(),
                 $product->getSalesRank() / $category->get_number_of_items()
             );
@@ -1174,10 +1283,25 @@ class AmazonCache implements IAmazonCache
         if ( !empty( $image_sets ) ) {
             foreach ($image_sets as $image_set) {
 
+            	if (!isset($image_set['swatch'])) {
+		            $image_set['swatch'] = array(
+		                'height'=>'',
+			            'width'=>'',
+			            'url'=>''
+		            );
+	            }
+
+	            if (!isset($image_set['hires'])) {
+		            $image_set['hires'] = array(
+			            'height'=>'',
+			            'width'=>'',
+			            'url'=>''
+		            );
+	            }
                 $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`AIN`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getAsin(),
+                    $product->getKeyValue(),
                     'swatch',
                     $image_set['swatch']['height'],
                     $image_set['swatch']['width'],
@@ -1189,10 +1313,18 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
                 );
 	            $amazondb->query($sql);
 
+	            if (!isset($image_set['small'])) {
+		            $image_set['small'] = array(
+			            'height'=>'',
+			            'width'=>'',
+			            'url'=>''
+		            );
+	            }
+
                 $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`AIN`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getAsin(),
+                    $product->getKeyValue(),
                     'small',
                     $image_set['small']['height'],
                     $image_set['small']['width'],
@@ -1204,10 +1336,18 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
                 );
 	            $amazondb->query($sql);
 
+	            if (!isset($image_set['thumb'])) {
+		            $image_set['thumb'] = array(
+			            'height'=>'',
+			            'width'=>'',
+			            'url'=>''
+		            );
+	            }
+
                 $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`AIN`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getAsin(),
+                    $product->getKeyValue(),
                     'thumb',
                     $image_set['thumb']['height'],
                     $image_set['thumb']['width'],
@@ -1219,10 +1359,18 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
                 );
 	            $amazondb->query($sql);
 
+	            if (!isset($image_set['medium'])) {
+		            $image_set['medium'] = array(
+			            'height'=>'',
+			            'width'=>'',
+			            'url'=>''
+		            );
+	            }
+
                 $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`AIN`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getAsin(),
+                    $product->getKeyValue(),
                     'medium',
                     $image_set['medium']['height'],
                     $image_set['medium']['width'],
@@ -1234,10 +1382,18 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
                 );
 	            $amazondb->query($sql);
 
+	            if (!isset($image_set['tiny'])) {
+		            $image_set['tiny'] = array(
+			            'height'=>'',
+			            'width'=>'',
+			            'url'=>''
+		            );
+	            }
+
                 $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`AIN`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getAsin(),
+                    $product->getKeyValue(),
                     'tiny',
                     $image_set['tiny']['height'],
                     $image_set['tiny']['width'],
@@ -1249,10 +1405,18 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
                 );
 	            $amazondb->query($sql);
 
+	            if (!isset($image_set['large'])) {
+		            $image_set['large'] = array(
+			            'height'=>'',
+			            'width'=>'',
+			            'url'=>''
+		            );
+	            }
+
                 $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`AIN`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getAsin(),
+                    $product->getKeyValue(),
                     'large',
                     $image_set['large']['height'],
                     $image_set['large']['width'],
@@ -1265,9 +1429,9 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
 	            $amazondb->query($sql);
 
 	            $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`AIN`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getAsin(),
+                    $product->getKeyValue(),
                     'hires',
                     $image_set['hires']['height'],
                     $image_set['hires']['width'],
@@ -1289,7 +1453,7 @@ ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated
             //die();
 
 
-            $pd = AmazonCache::getProduct($product->getAsin());
+            $pd = AmazonCache::getProduct($product->getKeyValue());
             //var_dump( $pd );
             //die();
         }

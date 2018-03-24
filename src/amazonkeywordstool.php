@@ -25,7 +25,7 @@ class AmazonKeywordsTool implements IAmazonKeywordsTool
 
 			global $wpdb;
 			$sql = $wpdb->prepare(
-				"SELECT `searchTerm`, AVG( `wp_amazon_amazon_products`.`avgRRF` ) as `rrf` FROM `wp_ama//zon_search`, `wp_amazon_amazon_products` WHERE `wp_amazon_search`.`AIN` = `wp_amazon_amazon_products`.`AIN` AND `wp_amazon_amazon_products`.`avgRRF` > 0
+				"SELECT `searchTerm`, AVG( `wp_amazon_amazon_products`.`avgRRF` ) as `rrf` FROM `wp_ama//zon_search`, `wp_amazon_amazon_products` WHERE `wp_amazon_search`.`keyValue` = `wp_amazon_amazon_products`.`keyValue` AND `wp_amazon_amazon_products`.`avgRRF` > 0
 			GROUP BY `wp_amazon_search`.`searchTerm` ORDER BY `rrf`",
 				''
 			);

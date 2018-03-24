@@ -38,7 +38,7 @@ class AmazonKeyword implements IAmazonKeyword
         global $wpdb;
 
         $sql = $wpdb->prepare(
-            "SELECT AVG( `wp_amazon_amazon_products`.`avgRRF` ) as `rrf` FROM `wp_amazon_search`, `wp_amazon_amazon_products` WHERE `wp_amazon_search`.`AIN` = `wp_amazon_amazon_products`.`AIN` AND `wp_amazon_search`.`searchTerm` = '%s'",
+            "SELECT AVG( `wp_amazon_amazon_products`.`avgRRF` ) as `rrf` FROM `wp_amazon_search`, `wp_amazon_amazon_products` WHERE `wp_amazon_search`.`keyValue` = `wp_amazon_amazon_products`.`keyValue` AND `wp_amazon_search`.`searchTerm` = '%s'",
             $this->name
         );
 

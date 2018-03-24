@@ -164,18 +164,21 @@ class AmazonProductSearch implements IAmazonProductSearch
     }
 
 
-    public static function itemSearch( $id, $idType, $relationshipType='', $endPoint = 'webservices.amazon.com', $uri = '/onca/xml' )
+    public static function itemSearch( $keyValue, $keyType, $relationshipType='', $endPoint = 'webservices.amazon.com', $uri = '/onca/xml', $retry = true )
 	{
 
 		global $conn;
+		global $options;
+
 		$transient = new Transient($conn);
-		$search_results_xml = $transient->fetch('itemsearchresultsxml' . $id .  $relationshipType);
+		$search_results_xml = $transient->fetch('itemsearchresultsxml' . $keyValue .  $relationshipType);
 
-		if ($search_results_xml != false) {
+
+		if (!empty($search_results_xml) && $search_results_xml != false) {
+
 			$parser = new AmazonParser();
-			$results = $parser->parse_item_search_results($search_results_xml);
+			$results = $parser->parse_item_search_results($search_results_xml, $keyType);
 			$product = $results['items'][0];
-
 			$related_products = array();
 
 			AmazonCache::cacheProduct($product, $relationshipType, $related_products);
@@ -183,8 +186,11 @@ class AmazonProductSearch implements IAmazonProductSearch
 		} else {
 
 			try {
-				$product = AmazonCache::getProduct($id, $relationshipType);
-				throw new \Exception("Just testing");
+				if ($options['cache']) {
+					$product = AmazonCache::getProduct( $keyValue, $relationshipType );
+				} else {
+					throw new \Exception("No caching");
+				}
 			} catch (\Exception $e) {
 
 
@@ -216,28 +222,63 @@ class AmazonProductSearch implements IAmazonProductSearch
 				}
 
 				$lookup->setResponseGroup($groups);
-				$lookup->setIdType($idType);
-				$lookup->setItemId($id);
+				$lookup->setIdType($keyType);
+				$lookup->setItemId($keyValue);
 
-				$search_results_xml = $apaiIO->runOperation($lookup);
+				try {
+					$search_results_xml = $apaiIO->runOperation( $lookup );
+				} catch(\Exception $e) {
+
+					if ($retry) {
+						// Retry after 5 seconds
+						sleep(5);
+						if ($keyType == "SKU") {
+							$keyType = "ASIN";
+						}
+						return AmazonProductSearch::itemSearch( $keyValue, $keyType, $relationshipType, $endPoint, $uri, false);
+					} else {
+						return false;
+					}
+				}
 				//header( 'Content-Type:application/xml' );
 
 				//echo $search_results_xml;
 				//die();
 				// Parse results.
 				$parser = new AmazonParser();
-				$results = $parser->parse_item_search_results($search_results_xml);
+				$results = $parser->parse_item_search_results($search_results_xml, $keyType);
+
+				if (!isset($results['items'][0])) {
+					if ($retry) {
+						// Retry after 5 seconds
+						sleep(5);
+						if ($keyType == "SKU") {
+							$keyType = "ASIN";
+						}
+						return AmazonProductSearch::itemSearch( $keyValue, $keyType, $relationshipType, $endPoint, $uri, false);
+					} else {
+						return false;
+					}
+				}
+
 				$product = $results['items'][0];
 
 				$related_products = array();
 
-				AmazonCache::cacheProduct($product, $relationshipType, $related_products);
-
-				$transient->save('itemsearchresultsxml' . $id .  $relationshipType, $search_results_xml, 3600 * 24 * 1 ); // Cache for one days.
+				if ($options['cache']) {
+					AmazonCache::cacheProduct( $product, $relationshipType, $related_products );
+					$transient->save( 'itemsearchresultsxml' . $keyValue . $relationshipType, $search_results_xml, 3600 * 24 * 1 ); // Cache for one days.
+				}
 
 			}
 
 		}
+
+		if (!$product && $keyType == "SKU") {
+			// Try again but search by ASIN
+			$product = AmazonProductSearch::itemSearch( $keyValue, "ASIN", $relationshipType, $endPoint, $uri, $retry);
+		}
+
 
         return $product;
 

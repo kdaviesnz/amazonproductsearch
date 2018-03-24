@@ -6,9 +6,6 @@ declare( strict_types=1 ); // must be first line
 namespace kdaviesnz\amazon;
 
 
-
-use PHPUnit\Runner\Exception;
-
 class AmazonDB implements IAmazonDB {
 
 	private $conn;
@@ -19,8 +16,7 @@ class AmazonDB implements IAmazonDB {
 	 *
 	 * @param $conn
 	 */
-	public function __construct($conn) {
-		global $conn;
+	public function __construct($conn) {;
 		$this->conn = $conn;
 	}
 
@@ -86,7 +82,8 @@ class AmazonDB implements IAmazonDB {
 		$result = mysqli_query($this->conn, $query);
 
 		if (is_bool($result)) {
-			throw new Exception(("Database error:".mysqli_error($this->conn)));
+			var_dump($query);
+			throw new \Exception(("Database error:".mysqli_error($this->conn)));
 		}
 
 		$results = array();

@@ -38,24 +38,32 @@ class Transient implements ITransient {
 	 */
 	public function save( String $transient, $value, int $expiration ):bool {
 
+		global $options;
+
+		if (!$options['cache']) {
+			return false;
+		}
+
 		$transient_timeout = '_transient_timeout_' . $transient;
 		$transient_option = '_transient_' . $transient;
 
-		if ( false === $this->get_option( $transient_option ) ) {
+
+		if ( empty($this->get_option( $transient_option )) ) {
 
 			$autoload = true;
 
 			if ( $expiration ) {
-				$autoload = 'no';
+				$autoload = false;
 				$this->add_option( $transient_timeout, time() + $expiration, '', false );
 			}
 			$result = $this->add_option( $transient_option, $value, '', $autoload );
+			$result = $this->add_option( $transient_timeout, time() + $expiration, '', $autoload );
+
 
 		} else {
 
 			// If expiration is requested, but the transient has no timeout option,
 			// delete, then re-create transient rather than update.
-			$update = true;
 			if ( $expiration ) {
 				if ( false === $this->get_option( $transient_timeout ) ) {
 					$this->delete_option( $transient_option );
@@ -65,11 +73,9 @@ class Transient implements ITransient {
 				} else {
 					$this->update_option( $transient_timeout, time() + $expiration );
 				}
+			} else {
+				$result = true;
 			}
-			if ( $update ) {
-				$result = $this->update_option( $transient_option, $value );
-			}
-
 
 		}
 
@@ -79,18 +85,26 @@ class Transient implements ITransient {
 
 	public function fetch(String $transient) {
 
+		global $options;
+		if (!$options['cache']) {
+			return false;
+		}
+
 		//   $related_products = get_transient('related' . $product->getAsin() );
 		$transient_option = '_transient_' . $transient;
 		$transient_timeout = '_transient_timeout_' . $transient;
 		$timeout = $this->get_option( $transient_timeout );
-		if ( false !== $timeout && $timeout < time() ) {
+
+
+		if ( $timeout != 0 && false !== $timeout && $timeout < time() ) {
 			$this->delete_option( $transient_option  );
 			$this->delete_option( $transient_timeout );
 			$value = false;
 		}
 
-		if ( ! isset( $value ) )
+		if ( ! isset( $value ) ) {
 			$value = $this->get_option( $transient_option );
+		}
 
 		return $value;
 
@@ -144,7 +158,7 @@ class Transient implements ITransient {
 
 		$row = $this->amazonDB->get_row( $this->amazonDB->prepare( "SELECT `option_value` FROM `wp_amazon_options` WHERE `option_name` = '$option'", ""));
 
-		return empty($row) ? null : $this->maybe_unserialize($row['option_value']);
+		return empty($row) ? null : $this->maybe_unserialize($row->option_value);
 
 	}
 

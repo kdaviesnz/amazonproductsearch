@@ -14,6 +14,9 @@ use ApaiIO\Operations\Lookup;
  */
 class AmazonProduct implements IAmazonProduct
 {
+    private $id = null;
+    private $keyType = "";
+    private $keyValue = "";
     private $asin = "";
     private $detailPageURL = "";
     private $itemLinks = array();
@@ -65,11 +68,20 @@ class AmazonProduct implements IAmazonProduct
     private $customerReview = '';
     private $editorialReview = '';
 
+    private $t30days = null;
+	private $t6months = null;
+	private $t12months = null;
+	private $t30daysSalesCount = null;
+	private $t6monthsSalesCount = null;
+	private $t12monthsSalesCount = null;
 
     /**
      * AmazonProduct constructor.
      */
     public function __construct(
+         $id,
+         $keyType,
+         $keyValue,
          $asin,//1
          $detailPageURL,
          $itemLinks,
@@ -120,6 +132,9 @@ class AmazonProduct implements IAmazonProduct
         $editorialReview
     ){
 
+        $this->id = $id;
+        $this->keyValue = $keyValue;
+        $this->keyType = $keyType;
         $this->asin = $asin;
         $this->detailPageURL = $detailPageURL;
         $this->itemLinks = $itemLinks;
@@ -171,6 +186,74 @@ class AmazonProduct implements IAmazonProduct
         $this->editorialReview = $editorialReview;
     }
 
+	public function getId():String {
+        return $this->id;
+    }
+
+    public function getKeyType() {
+        return $this->keyType;
+    }
+
+	public function getKeyValue() {
+		return $this->keyValue;
+	}
+
+	public function getDescription():String {
+        return "";
+    }
+
+	public function getUPCEAN():String {
+        return "";
+    }
+
+    public function getCompetitivePrice():float {
+        return 0.00;
+    }
+
+	public function getNumberOfCompetitiveSellers():int {
+        return 0;
+    }
+
+	public function get30Days():float {
+        return $this->t30days;
+    }
+
+	public function get6Months():float {
+		return $this->t6months;
+    }
+
+	public function get12months():float {
+        return $this->t12months;
+    }
+
+	public function get30DaysSalesCount():float {
+		return $this->t30daysSalesCount;
+	}
+
+	public function get6MonthsSalesCount():float {
+		return $this->t6monthsSalesCount;;
+	}
+
+	public function get12monthsSalesCount():float {
+		return $this->t12monthsSalesCount;;
+	}
+
+	public function getCost():float {
+        return 0.00;
+    }
+
+	public function getSoldByAmazon():bool {
+        return true;
+    }
+
+	public function getMarginPerc():float {
+        return 0.00;
+    }
+
+	public function getMarginAmt():float {
+        return 0.00;
+    }
+
     public function getImageSets() {
         return $this->image_sets;
     }
@@ -200,45 +283,6 @@ class AmazonProduct implements IAmazonProduct
         return $this->images;
     }
 
-    // remove
-    /*
-    public function add_to_database() {
-        global $wpdb;
-        $sql = $wpdb->prepare(
-            "INSERT  INTO `wp_amazon_amazon_products`
-              (`AIN`, `title`) 
-              VALUES ('%s', '%s')",
-            $this->getAsin(),
-            $this->getTitle()
-        );
-        $wpdb->query( $sql );
-        if ( ! empty( $wpdb->last_error ) ) {
-            echo $wpdb->last_error;
-            throw new \Exception( $wpdb->last_error );
-        }
-
-        $categories = $this->getCategories();
-        foreach( $categories as $category ) {
-            $sql = $wpdb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_product_categories`
-              (`AIN`, `categoryID`, `RRF`)
-               VALUES ('%s', '%s', '%s' );",
-                $this->getAsin(),
-                $category->get_category_id(),
-                $this->salesRank / $category->get_number_of_items()
-            );
-            $wpdb->query( $sql );
-            if ( ! empty( $wpdb->last_error ) ) {
-                echo $wpdb->last_error;
-                throw new \Exception( $wpdb->last_error );
-            }
-        }
-
-
-        return true;
-    }
-
-    */
 
     /**
      * @return string
@@ -710,6 +754,41 @@ class AmazonProduct implements IAmazonProduct
         return $this->editorialReview;
     }
 
+	public function addSalesData(array $salesData):bool {
+
+        global $conn;
+        $amazondb = new AmazonDB($conn);
+
+        $T30daysSafe = mysqli_real_escape_string($conn, $salesData["30days"]);
+		$T6monthsSafe = mysqli_real_escape_string($conn, $salesData["6months"]);
+		$T12monthsSafe = mysqli_real_escape_string($conn, $salesData["12months"]);
+		$T30daysSalesCountSafe = mysqli_real_escape_string($conn, $salesData["30daysSalesCount"]);
+		$T6monthsSalesCountSafe = mysqli_real_escape_string($conn, $salesData["6monthsSalesCount"]);
+		$T12monthsSalesCountSafe = mysqli_real_escape_string($conn, $salesData["12monthsSalesCount"]);
+
+		$productIdSafe = mysqli_real_escape_string($conn, $this->id);
+
+		$sql = "UPDATE `wp_amazon_amazon_products` SET 
+                  `T30days` = '$T30daysSafe',
+                  `T6months` = '$T6monthsSafe',
+                  `T12months` = '$T12monthsSafe',
+                  `T30daysSalesCount` = '$T30daysSalesCountSafe',
+                  `T6monthsSalesCount` = '$T6monthsSalesCountSafe',
+                  `T12monthsSalesCount` = '$T12monthsSalesCountSafe'
+                  WHERE `id` = $productIdSafe";
+		$amazondb->query($sql);
+
+		$this->t30days = $salesData["30days"];
+		$this->t6months = $salesData["6months"];
+		$this->t12months = $salesData["12months"];
+		$this->t30daysSalesCount = $salesData["30daysSalesCount"];
+		$this->t6monthsSalesCount = $salesData["6monthsSalesCount"];
+		$this->t12monthsSalesCount = $salesData["12monthsSalesCount"];
+
+		return true;
+
+
+    }
 
 
 }

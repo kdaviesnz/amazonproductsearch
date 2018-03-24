@@ -26,6 +26,7 @@
  * use tokens when retrieving the list.
  */
 class AmazonReportRequestList extends AmazonReportsCore implements Iterator{
+
     protected $tokenFlag = false;
     protected $tokenUseFlag = false;
     protected $index = 0;
@@ -260,6 +261,7 @@ class AmazonReportRequestList extends AmazonReportsCore implements Iterator{
      * @return boolean <b>FALSE</b> if something goes wrong
      */
     public function fetchRequestList($r = true){
+
         $this->prepareToken();
         
         $url = $this->urlbase.$this->urlbranch;

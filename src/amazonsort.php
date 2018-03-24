@@ -33,9 +33,9 @@ class AmazonSort implements IAmazonSort
             $asins_string = "'" . implode("','", $asins) . "'";
 
             $sql = $wpdb->prepare(
-                "SELECT `AIN` FROM `wp_amazon_amazon_products` 
+                "SELECT `AIN`, `keyType`, `keyValue` FROM `wp_amazon_amazon_products` 
               WHERE `avgRRF` > 0 
-              AND `AIN` IN ( $asins_string )
+              AND `keyValue` IN ( $asins_string )
               ORDER BY `avgRRF` ASC",
                 ""
             );

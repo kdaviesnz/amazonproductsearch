@@ -174,6 +174,9 @@ class AmazonParser implements IAmazonParser
 
               //  var_dump($similar_products);
                 $product = new \kdaviesnz\amazon\AmazonProduct(
+                	null,
+                	'ASIN',
+	                (string)$item->ASIN,
                     (string)$item->ASIN, //1
                     (string)$item->DetailPageURL,
                     (array)$item_links,
@@ -313,7 +316,7 @@ class AmazonParser implements IAmazonParser
 
     }
 
-    public function parse_item_search_results( $search_results_xml ) {
+    public function parse_item_search_results( $search_results_xml, $keyType ) {
 
         $pxml = simplexml_load_string( $search_results_xml );
 
@@ -450,48 +453,72 @@ class AmazonParser implements IAmazonParser
                 $temp = isset($item->ImageSets) ? (array)$item->ImageSets:array();
                 $image_sets = array();
                 foreach ($temp as $image_set) {
-                    $image_sets[] = array(
-                        'swatch' => array(
-                            'url' => (string)$image_set->SwatchImage->URL,
-                            'height' => (string)$image_set->SwatchImage->Height,
-                            'width' => (string)$image_set->SwatchImage->Width,
-                        ),
-                        'small' => array(
-                            'url' => (string)$image_set->SmallImage->URL,
-                            'height' => (string)$image_set->SmallImage->Height,
-                            'width' => (string)$image_set->SmallImage->Width,
-                        ),
-                        'thumb' => array(
-                            'url' => (string)$image_set->ThumbnailImage->URL,
-                            'height' => (string)$image_set->ThumbnailImage->Height,
-                            'width' => (string)$image_set->ThumbnailImage->Width,
-                        ),
-                        'tiny' => array(
-                            'url' => (string)$image_set->TinyImage->URL,
-                            'height' => (string)$image_set->TinyImage->Height,
-                            'width' => (string)$image_set->TinyImage->Width,
-                        ),
-                        'medium' => array(
-                            'url' => (string)$image_set->MediumImage->URL,
-                            'height' => (string)$image_set->MediumImage->Height,
-                            'width' => (string)$image_set->MediumImage->Width,
-                        ),
-                        'large' => array(
-                            'url' => (string)$image_set->LargeImage->URL,
-                            'height' => (string)$image_set->LargeImage->Height,
-                            'width' => (string)$image_set->LargeImage->Width,
-                        ),
-                        'hires' => array(
-                            'url' => (string)$image_set->HiResImage->URL,
-                            'height' => (string)$image_set->HiResImage->Height,
-                            'width' => (string)$image_set->HiResImage->Width,
-                        ),
-                    );
+                	if (is_object($image_set)) {
+		                $image_sets[] = array(
+			                'swatch' => array(
+				                'url'    => (string) $image_set->SwatchImage->URL,
+				                'height' => (string) $image_set->SwatchImage->Height,
+				                'width'  => (string) $image_set->SwatchImage->Width,
+			                ),
+			                'small'  => array(
+				                'url'    => (string) $image_set->SmallImage->URL,
+				                'height' => (string) $image_set->SmallImage->Height,
+				                'width'  => (string) $image_set->SmallImage->Width,
+			                ),
+			                'thumb'  => array(
+				                'url'    => (string) $image_set->ThumbnailImage->URL,
+				                'height' => (string) $image_set->ThumbnailImage->Height,
+				                'width'  => (string) $image_set->ThumbnailImage->Width,
+			                ),
+			                'tiny'   => array(
+				                'url'    => (string) $image_set->TinyImage->URL,
+				                'height' => (string) $image_set->TinyImage->Height,
+				                'width'  => (string) $image_set->TinyImage->Width,
+			                ),
+			                'medium' => array(
+				                'url'    => (string) $image_set->MediumImage->URL,
+				                'height' => (string) $image_set->MediumImage->Height,
+				                'width'  => (string) $image_set->MediumImage->Width,
+			                ),
+			                'large'  => array(
+				                'url'    => (string) $image_set->LargeImage->URL,
+				                'height' => (string) $image_set->LargeImage->Height,
+				                'width'  => (string) $image_set->LargeImage->Width,
+			                ),
+			                'hires'  => array(
+				                'url'    => (string) $image_set->HiResImage->URL,
+				                'height' => (string) $image_set->HiResImage->Height,
+				                'width'  => (string) $image_set->HiResImage->Width,
+			                ),
+		                );
+	                }
                 }
 
-                $availability = (string) $offers['Offer']->OfferListing->Availability;
+                $availability = isset($offers['Offer']) ? (string) $offers['Offer']->OfferListing->Availability : null;
 
-                $product = new \kdaviesnz\amazon\AmazonProduct(
+	            switch ($keyType) {
+		            case 'ASIN':
+			            $keyValue = (string)$item->ASIN;
+			            break;
+		            case 'EAN':
+			            $keyValue = (string)$item->EAN;
+			            break;
+		            case 'UPC':
+			            $keyValue = (string)$item->UPC;
+			            break;
+		            default;
+			            $keyValue = (string)$item->ASIN;
+	            }
+
+	            if (empty($keyValue)) {
+	            	$keyType = "ASIN";
+	            	$keyValue = (string)$item->ASIN;
+	            }
+
+	            $product = new \kdaviesnz\amazon\AmazonProduct(
+                	null,
+	                $keyType,
+                    $keyValue,
                     (string)$item->ASIN, //1
                     (string)$item->DetailPageURL,
                     (array)$item_links,
@@ -535,9 +562,9 @@ class AmazonParser implements IAmazonParser
                     $merchant,
                     $warranty,
                     $image_sets,
-                    (float) $offers['Offer']->OfferListing->AmountSaved->Amount,
+                    isset($offers['Offer']) ? (float) $offers['Offer']->OfferListing->AmountSaved->Amount:null,
                     $availability, // 45
-                    '0' == (string) $offers['Offer']->OfferListing->IsEligibleForSuperSaverShipping ? 'Not available for free shipping' : 'Available for free shipping',
+	                isset($offers['Offer']) ? '0' == (string) $offers['Offer']->OfferListing->IsEligibleForSuperSaverShipping ? 'Not available for free shipping' : 'Available for free shipping':null,
                     $customerReviewsLink,
                     !empty( $editorialReview ) ? $editorialReview: 'blank'
                 );
@@ -549,6 +576,7 @@ class AmazonParser implements IAmazonParser
             $products[] = $product;
 
         }
+
 
         return array(
             'items' => $products,

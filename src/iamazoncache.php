@@ -7,7 +7,7 @@ interface IAmazonCache
     public static function cacheKeywords( $keyword );
     public static function getKeywords( $keyword, $rrf, $depth );
 
-    public static function cacheProduct( IAmazonProduct $product, $relationshipType, $related_products );
+    public static function cacheProduct( IAmazonProduct $product, $relationshipType, $related_products = array() );
     public static function getProduct( $ain );
     
     public static function cacheCategory( AmazonCategory $category );

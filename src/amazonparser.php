@@ -319,8 +319,14 @@ class AmazonParser implements IAmazonParser
     public function parse_item_search_results( $search_results_xml, $keyType ) {
 
         $pxml = simplexml_load_string( $search_results_xml );
+        $keyValue = "";
+
+        if($pxml && $pxml->Items->Request->Errors->Error) {
+        	throw new \Exception((String)$pxml->Items->Request->Errors->Error->Message);
+        }
 
         if ($pxml && $pxml->Items->children()) {
+
             foreach ($pxml->Items->children() as $item) {
                 if ('Item' === $item->getName()) {
                     $this->items[] = $item;
@@ -330,8 +336,10 @@ class AmazonParser implements IAmazonParser
             $this->totalResults = (int) $pxml->Items->TotalResults;
             $this->totalPages = (int) $pxml->Items->TotalPages;
             $this->numberResults = count($this->items);
-        }
+	        $keyValue = (string) $pxml->Items->Request->ItemLookupRequest->ItemId;
+	        $keyType = (string) $pxml->Items->Request->ItemLookupRequest->IdType;
 
+        }
 
         $products = array();
 
@@ -496,25 +504,6 @@ class AmazonParser implements IAmazonParser
 
                 $availability = isset($offers['Offer']) ? (string) $offers['Offer']->OfferListing->Availability : null;
 
-	            switch ($keyType) {
-		            case 'ASIN':
-			            $keyValue = (string)$item->ASIN;
-			            break;
-		            case 'EAN':
-			            $keyValue = (string)$item->EAN;
-			            break;
-		            case 'UPC':
-			            $keyValue = (string)$item->UPC;
-			            break;
-		            default;
-			            $keyValue = (string)$item->ASIN;
-	            }
-
-	            if (empty($keyValue)) {
-	            	$keyType = "ASIN";
-	            	$keyValue = (string)$item->ASIN;
-	            }
-
 	            $product = new \kdaviesnz\amazon\AmazonProduct(
                 	null,
 	                $keyType,
@@ -568,7 +557,6 @@ class AmazonParser implements IAmazonParser
                     $customerReviewsLink,
                     !empty( $editorialReview ) ? $editorialReview: 'blank'
                 );
-
 
                 AmazonCache::cacheProduct( $product, '', $related_products );
             }

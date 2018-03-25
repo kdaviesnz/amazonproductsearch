@@ -170,6 +170,7 @@ class AmazonProductSearch implements IAmazonProductSearch
 		global $conn;
 		global $options;
 
+
 		$transient = new Transient($conn);
 		$search_results_xml = $transient->fetch('itemsearchresultsxml' . $keyValue .  $relationshipType);
 
@@ -225,13 +226,20 @@ class AmazonProductSearch implements IAmazonProductSearch
 				$lookup->setIdType($keyType);
 				$lookup->setItemId($keyValue);
 
+
 				try {
 					$search_results_xml = $apaiIO->runOperation( $lookup );
+					//echo $search_results_xml;
+					//die("hello");
 				} catch(\Exception $e) {
 
+					//die("bye");
 					if ($retry) {
 						// Retry after 5 seconds
 						sleep(5);
+						if ($keyType == "EAN") {
+							$keyType = "UPC";
+						}
 						if ($keyType == "SKU") {
 							$keyType = "ASIN";
 						}
@@ -242,16 +250,31 @@ class AmazonProductSearch implements IAmazonProductSearch
 				}
 				//header( 'Content-Type:application/xml' );
 
-				//echo $search_results_xml;
-				//die();
 				// Parse results.
 				$parser = new AmazonParser();
-				$results = $parser->parse_item_search_results($search_results_xml, $keyType);
+
+				try {
+					$results = $parser->parse_item_search_results( $search_results_xml, $keyType );
+				} catch(\Exception $e) {
+					if ($keyType == "EAN") {
+						$keyType = "UPC";
+					}
+					elseif ($keyType == "UPC") {
+						$keyType = "EAN";
+					}
+					elseif ($keyType == "SKU") {
+						$keyType = "ASIN";
+					}
+					return AmazonProductSearch::itemSearch( $keyValue, $keyType, $relationshipType, $endPoint, $uri, false);
+				}
 
 				if (!isset($results['items'][0])) {
 					if ($retry) {
 						// Retry after 5 seconds
 						sleep(5);
+						if ($keyType == "EAN") {
+							$keyType = "UPC";
+						}
 						if ($keyType == "SKU") {
 							$keyType = "ASIN";
 						}

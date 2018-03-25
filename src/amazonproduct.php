@@ -766,7 +766,8 @@ class AmazonProduct implements IAmazonProduct
 		$T6monthsSalesCountSafe = mysqli_real_escape_string($conn, $salesData["6monthsSalesCount"]);
 		$T12monthsSalesCountSafe = mysqli_real_escape_string($conn, $salesData["12monthsSalesCount"]);
 
-		$productIdSafe = mysqli_real_escape_string($conn, $this->id);
+		$keyTypeSafe = mysqli_real_escape_string($conn, $this->keyType);
+		$keyValueSafe = mysqli_real_escape_string($conn, $this->keyValue);
 
 		$sql = "UPDATE `wp_amazon_amazon_products` SET 
                   `T30days` = '$T30daysSafe',
@@ -775,7 +776,7 @@ class AmazonProduct implements IAmazonProduct
                   `T30daysSalesCount` = '$T30daysSalesCountSafe',
                   `T6monthsSalesCount` = '$T6monthsSalesCountSafe',
                   `T12monthsSalesCount` = '$T12monthsSalesCountSafe'
-                  WHERE `id` = $productIdSafe";
+                  WHERE `keyValue` = '$keyValueSafe' AND `keyType`='$keyTypeSafe'";
 		$amazondb->query($sql);
 
 		$this->t30days = $salesData["30days"];
@@ -786,7 +787,6 @@ class AmazonProduct implements IAmazonProduct
 		$this->t12monthsSalesCount = $salesData["12monthsSalesCount"];
 
 		return true;
-
 
     }
 

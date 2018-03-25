@@ -1,6 +1,7 @@
 <?php
 
 
+
 $conn = mysqli_connect("localhost", "dbuser", "dbpassword", "dbname");
 
 if (!$conn) {

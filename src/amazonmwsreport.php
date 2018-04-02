@@ -38,28 +38,47 @@ class AmazonMWSReport extends \AmazonReport implements IAmazonMWSReport{
 	 * @return boolean <b>FALSE</b> if something goes wrong
 	 */
 	public function fetchReport(){
+
+
 		try {
 			$ok = parent::fetchReport();
-		} catch (Exception $e) {
+		} catch (\Exception $e) {
 			$ok = false;
 		}
 
 		global $options;
 
+
 		if (!$ok && $options["MSWTestMode"]) {
+
 			// Use defaults.
-			$this->rawreport = file_get_contents("src/mock/soldlistings.csv");
+			$path = "src/mock/soldlistings.csv";
+			if (!is_file($path)) {
+				$path = "mock/soldlistings.csv";
+			}
+
+			if (!is_file($path)) {
+				$path = "../" . $path;
+			}
+
+			$this->rawreport = file_get_contents($path);
 		}
 	}
 
-	public function writeReport() {
+	public function writeReport(String $generatedReportId) {
 
-		if (!is_dir("src/reports")) {
-			mkdir("src/reports");
+
+		$path = "src/reports/";
+		if (!is_dir("src")) {
+			$path = "../" . $path;
 		}
 
-		$path = "src/reports/" . $this->options['ReportId'] . ".csv";
+		if (!is_dir($path)) {
+			mkdir($path);
+		}
 
+		$path = $path . $generatedReportId . ".csv";
+		
 		parent::saveReport($path);
 
 	}

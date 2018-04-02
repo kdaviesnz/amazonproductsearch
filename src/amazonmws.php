@@ -6,10 +6,15 @@ declare( strict_types=1 );
 namespace kdaviesnz\amazon;
 
 
+use PHPUnit\Runner\Exception;
+
 class AmazonMWS {
 
 
 	public function updatesSalesData() {
+
+		// How to get if product sold by amazon
+		//http://docs.developer.amazonservices.com/en_US/products/Products_GetLowestPricedOffersForASIN.html
 
 		//30 days, 6 months, 12 months
 
@@ -25,7 +30,13 @@ class AmazonMWS {
 
 		$headings = array();
 
-		foreach ($this->getReportRows("src/reports/" . $reportId . ".csv") as $row) {
+		$path = "src/reports/" . $reportId . ".csv";
+		if (!is_file($path)) {
+			$path = "../" . $path;
+		}
+
+		foreach ($this->getReportRows($path) as $row) {
+
 			$fieldValues = explode("\t", $row[0]);
 			if (array_search("order-id", $fieldValues )!==false){
 				$headings = $fieldValues;
@@ -125,7 +136,8 @@ class AmazonMWS {
 				}
 			);
 
-			// Get item match sku
+
+			// Get item matching sku
 			// This also adds record to database if required
 			$product = \kdaviesnz\amazon\AmazonProductSearch::itemSearch(
 				$sku,
@@ -135,6 +147,39 @@ class AmazonMWS {
 
 			if ($product) {
 
+				// AmazonProductInfo
+				$productInfo = new AmazonMWSProductInfo();
+				$productInfo->setASINs( $product->getAsin() );
+
+				// Competitive price
+				$competitivePricing = $productInfo->fetchCompetitivePricing();
+
+				if ($competitivePricing) {
+					$competitivePrice = $competitivePricing->CompetitivePricing->CompetitivePrices[0]->CompetitivePrice->ListingPrice->Amount;
+					$numberOfCompetitiveSellers = count($competitivePricing->CompetitivePricing->CompetitivePrices[0]);
+				} else {
+					global $options;
+					if ( isset( $options["MSWTestMode"] ) && $options["MSWTestMode"] ) {
+						$competitivePrice = 15.00;
+						$numberOfCompetitiveSellers = 10;
+					} else {
+						throw new \Exception( "Could not get competitive price" );
+					}
+				}
+
+				// Determine if sold by Amazon
+				$lowestPricedOffers = $productInfo->fetchLowestPricedOffers();
+				if ($lowestPricedOffers) {
+					$soldByAmazon = (bool) $lowestPricedOffers->Offer->Offers[0]->Offer->IsFulfilledByAmazon;
+				} else {
+					global $options;
+					if ( isset( $options["MSWTestMode"] ) && $options["MSWTestMode"] ) {
+						$soldByAmazon = false;
+					} else {
+						throw new \Exception( "Could not get if product was sold by Amazon" );
+					}
+				}
+
 				$salesData = array(
 					"30days" => $t30days,
 					"6months" => $t6months,
@@ -142,11 +187,22 @@ class AmazonMWS {
 					"30daysSalesCount" => $t30daysSalesCount,
 					"6monthsSalesCount" => $t6monthsSalesCount,
 					"12monthsSalesCount" => $t12monthsSalesCount,
+					"soldByAmazon" => $soldByAmazon,
+					"competitivePrice"=> $competitivePrice,
+					"numberOfCompetitiveSellers" => $numberOfCompetitiveSellers
 				);
+
+
+				// This updates the database
 				$product->addSalesData($salesData);
+
 			}
 
 		}
+
+	//	die("amazonmws.php");
+
+		return $reportId;
 
 	}
 
@@ -159,14 +215,27 @@ class AmazonMWS {
 	 */
 	public function generateEstimatedSalesReport(\DateTime $startDate, \DateTime $endDate): String {
 
+
+		global $options;
+		$useMock = isset($options["MSWTestMode"]) && $options["MSWTestMode"]==true;
+
 		/*
 		 First step is to call ReportRequest method from MWS. Start_Date and End_Date are passed as parameters. Default value is current date and time. This returns the data from where the last settlement report was generated. This method will return the ReportRequestId List.
 		 */
-		$reportRequest = new AmazonMWSReportRequest();
+
+		// setMock($b = true,$files = null)
+		$reportRequest = new AmazonMWSReportRequest(null, $useMock);
+		if ($useMock) {
+			$path = "requestreportresponse.xml";
+			$reportRequest->setMock(true,"requestreportresponse.xml");
+		}
 		$reportRequest->setReportType('_GET_CONVERGED_FLAT_FILE_SOLD_LISTINGS_DATA_');
 		$reportRequest->setTimeLimits($startDate->format('c'), $endDate->format('c'));
 		$reportRequest->requestReport();
 		$report = $reportRequest->getResponse(); // array
+
+		//var_dump($report);
+		//die();
 
 		/*
 		 $report:
@@ -220,10 +289,15 @@ array(7) {
 </GetReportRequestListResponse>
 		 */
 
-		$reportRequestList = new AmazonMWSReportRequestList();
+		$reportRequestList = new AmazonMWSReportRequestList(null, $useMock);
+		if ($useMock) {
+			$path = "fetchReportList.xml";
+			$reportRequestList->setMock(true,"fetchReportList.xml");
+		}
 		$reportRequestList->setUseToken(true);
 		$reportRequestList->fetchRequestList();
 		$requestList = $reportRequestList->getList();
+
 
 //		var_dump($requestList);
 		/*
@@ -259,16 +333,21 @@ array(7) {
 		});
 		$generatedReportId = $rows[0]["GeneratedReportId"];
 
+
 		/*
 		 Check that the GeneratedReportId is present in our system to avoid duplicate entry and use GetReportRequest method to generate the report. If the GeneratedReportId is not present in the system we use the GetReportRequest and we  pass GeneratedReportId as the parameter. It returns data in XML format.
 		@see http://docs.developer.amazonservices.com/en_AU/reports/Reports_GetReport.html ?
 		 */
-		$report = new AmazonMWSReport();
+		$report = new AmazonMWSReport(null, null, $useMock);
+		if ($useMock) {
+			$path = "soldlistings.csv";
+			$report->setMock(true,$path);
+		}
 		$report->setReportId($generatedReportId);
 		$report->fetchReport();
 
 		// Save report
-		$report->writeReport();
+		$report->writeReport($generatedReportId);
 
 		return $generatedReportId;
 
@@ -276,7 +355,7 @@ array(7) {
 
 	private function getReportRows($file) {
 		$handle = fopen($file, 'rb'); if ($handle === false) {
-			throw new Exception();
+			throw new \Exception();
 		}
 
 		while (feof($handle) === false) {

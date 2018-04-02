@@ -13,15 +13,16 @@ interface IAmazonProduct
 	public function getKeyValue();
 	public function getDescription():String;
     public function getUPCEAN():String;
-    public function getCompetitivePrice():float;
+    public function getCompetitivePrice();
     public function getNumberOfCompetitiveSellers():int;
     public function get30Days():float;
     public function get6Months():float;
     public function get12months():float;
-    public function getCost():float;
-    public function getSoldByAmazon():bool;
-    public function getMarginPerc():float;
-	public function getMarginAmt():float;
+    public function getCost();
+    public function getSoldByAmazon();
+    public function getMarginPerc(float $cost):float;
+	public function getMarginAmt(float $cost):float;
+	public function addCost($cost);
 
     public function getAsin();
     public function getDetailPageURL();

@@ -12,246 +12,306 @@ use ApaiIO\Operations\Lookup;
  * Class AmazonProduct
  * @package kdaviesnz\amazon
  */
-class AmazonProduct implements IAmazonProduct
-{
-    private $id = null;
-    private $keyType = "";
-    private $keyValue = "";
-    private $asin = "";
-    private $detailPageURL = "";
-    private $itemLinks = array();
-    private $salesRank = 0;
-    private $author = "";
-    private $type = "";
-    private $brand = "";
-    private $department = "";
-    private $color = "";
-    private $EAN = "";
-    private $feature = array();
-    private $genre = "";
-    private $isAdultProduct = false; // bool
-    private $isAutographed = false; // bool
-    private $isMemorabilia = false; // bool
-    private $itemDimensions = array();
-    private $label = "";
-    private $languages = array(); // array
-    private $listPriceAmount = "";
-    private $listPriceCurrencyCode = "";
-    private $listPriceFormattedPrice = "";
-    private $manufacturer = "";
-    private $productGroup = "";
-    private $productTypeName = "";
-    private $publisher = "";
-    private $title = "";
-    private $lowestNewPriceAmount = "";
-    private $lowestNewPriceCurrencyCode = "";
-    private $lowestNewPriceFormattedPrice = "";
-    private $LowestUsedPriceAmount = "";
-    private $lowestUsedPriceCurrencyCode = "";
-    private $lowestUsedPriceFormattedPrice = "";
-    private $lowestCollectiblePriceAmount = "";
-    private $lowestCollectiblePriceCurrencyCode = "";
-    private $lowestCollectiblePriceFormattedPrice = "";
-    private $related_products = array();
-    private $frequently_bought_together = array();
-    private $similar_products = array();
-    private $images = array();
-    private $categories = array();
-    private $rrfs = array();
-    private $mpn = '';
-    private $merchant = '';
-    private $warranty = '';
-    private $image_sets = '';
-    private $amountSaved = 0.00;
-    private $availablity = '';
-    private $freeShippingMessage = '';
-    private $customerReview = '';
-    private $editorialReview = '';
+class AmazonProduct implements IAmazonProduct {
+	public $id = null;
+	private $keyType = "";
+	private $keyValue = "";
+	private $asin = "";
+	private $detailPageURL = "";
+	private $itemLinks = array();
+	private $salesRank = 0;
+	private $author = "";
+	private $type = "";
+	private $brand = "";
+	private $department = "";
+	private $color = "";
+	private $EAN = "";
+	private $feature = array();
+	private $genre = "";
+	private $isAdultProduct = false; // bool
+	private $isAutographed = false; // bool
+	private $isMemorabilia = false; // bool
+	private $itemDimensions = array();
+	private $label = "";
+	private $languages = array(); // array
+	private $listPriceAmount = "";
+	private $listPriceCurrencyCode = "";
+	private $listPriceFormattedPrice = "";
+	private $manufacturer = "";
+	private $productGroup = "";
+	private $productTypeName = "";
+	private $publisher = "";
+	private $title = "";
+	private $lowestNewPriceAmount = "";
+	private $lowestNewPriceCurrencyCode = "";
+	private $lowestNewPriceFormattedPrice = "";
+	private $LowestUsedPriceAmount = "";
+	private $lowestUsedPriceCurrencyCode = "";
+	private $lowestUsedPriceFormattedPrice = "";
+	private $lowestCollectiblePriceAmount = "";
+	private $lowestCollectiblePriceCurrencyCode = "";
+	private $lowestCollectiblePriceFormattedPrice = "";
+	private $related_products = array();
+	private $frequently_bought_together = array();
+	private $similar_products = array();
+	private $images = array();
+	private $categories = array();
+	private $rrfs = array();
+	private $mpn = '';
+	private $merchant = '';
+	private $warranty = '';
+	private $image_sets = '';
+	private $amountSaved = 0.00;
+	private $availablity = '';
+	private $freeShippingMessage = '';
+	private $customerReview = '';
+	private $editorialReview = '';
 
-    private $t30days = null;
+	private $t30days = null;
 	private $t6months = null;
 	private $t12months = null;
 	private $t30daysSalesCount = null;
 	private $t6monthsSalesCount = null;
 	private $t12monthsSalesCount = null;
+	private $soldByAmazon = null;
+	private $competitivePrice = null;
+	private $numberOfCompetitiveSellers = null;
+	private $cost;
+	private $UPC;
 
-    /**
-     * AmazonProduct constructor.
-     */
-    public function __construct(
-         $id,
-         $keyType,
-         $keyValue,
-         $asin,//1
-         $detailPageURL,
-         $itemLinks,
-         $salesRank,
-         $author,
-         $type,
-         $brand,
-         $department,
-         $color,
-         $EAN,//10
-         $feature,
-         $genre,
-         $isAdultProduct,
-         $isAutographed,
-         $isMemorabilia,
-         $itemDimensions,
-         $label,
-         $languages, // 18
-         $listPriceAmount,
-         $listPriceCurrencyCode, //20
-         $listPriceFormattedPrice,
-         $manufacturer,
-         $productGroup,
-         $productTypeName,
-         $publisher,
-         $title,
-         $lowestNewPriceAmount,
-         $lowestNewPriceCurrencyCode,
-         $lowestNewPriceFormattedPrice,
-         $LowestUsedPriceAmount, // 30
-         $lowestUsedPriceCurrencyCode,
-         $lowestUsedPriceFormattedPrice,
-         $lowestCollectiblePriceAmount,
-         $lowestCollectiblePriceCurrencyCode,
-         $lowestCollectiblePriceFormattedPrice,
-         $images,
-         $similar_products,
-         $categories,
-         $rrfs, // 39
-         $mpn,
-         $merchant,
-         $warranty,
-         $image_sets,
-         $amountSaved,
-         $availability,
-         $freeShippingMessage,
-         $customerReview,
-        $editorialReview
-    ){
+	/**
+	 * AmazonProduct constructor.
+	 */
+	public function __construct(
+		$id,
+		$keyType,
+		$keyValue,
+		$asin,//1
+		$detailPageURL,
+		$itemLinks,
+		$salesRank,
+		$author,
+		$type,
+		$brand,
+		$department,
+		$color,
+		$EAN,//10
+		$feature,
+		$genre,
+		$isAdultProduct,
+		$isAutographed,
+		$isMemorabilia,
+		$itemDimensions,
+		$label,
+		$languages, // 18
+		$listPriceAmount,
+		$listPriceCurrencyCode, //20
+		$listPriceFormattedPrice,
+		$manufacturer,
+		$productGroup,
+		$productTypeName,
+		$publisher,
+		$title,
+		$lowestNewPriceAmount,
+		$lowestNewPriceCurrencyCode,
+		$lowestNewPriceFormattedPrice,
+		$LowestUsedPriceAmount, // 30
+		$lowestUsedPriceCurrencyCode,
+		$lowestUsedPriceFormattedPrice,
+		$lowestCollectiblePriceAmount,
+		$lowestCollectiblePriceCurrencyCode,
+		$lowestCollectiblePriceFormattedPrice,
+		$images,
+		$similar_products,
+		$categories,
+		$rrfs, // 39
+		$mpn,
+		$merchant,
+		$warranty,
+		$image_sets,
+		$amountSaved,
+		$availability,
+		$freeShippingMessage,
+		$customerReview,
+		$editorialReview,
+		$UPC
+	) {
 
-        $this->id = $id;
-        $this->keyValue = $keyValue;
-        $this->keyType = $keyType;
-        $this->asin = $asin;
-        $this->detailPageURL = $detailPageURL;
-        $this->itemLinks = $itemLinks;
-        $this->salesRank = $salesRank;
-        $this->author = $author;
-        $this->type = $type;
-        $this->brand = $brand;
-        $this->department = $department;
-        $this->color = $color;
-        $this->EAN = $EAN;
-        $this->feature = $feature;
-        $this->genre = $genre;
-        $this->isAdultProduct = $isAdultProduct;
-        $this->isAutographed = $isAutographed;
-        $this->isMemorabilia = $isMemorabilia;
-        $this->itemDimensions = $itemDimensions;
-        $this->label = $label;
-        $this->languages = $languages;
-        $this->listPriceAmount = $listPriceAmount;
-        $this->listPriceCurrencyCode = $listPriceCurrencyCode;
-        $this->listPriceFormattedPrice = $listPriceFormattedPrice;
-        $this->manufacturer = $manufacturer;
-        $this->productGroup = $productGroup;
-        $this->productTypeName = $productTypeName;
-        $this->publisher = $publisher;
-        $this->title = $title;
-        $this->lowestNewPriceAmount = $lowestNewPriceAmount;
-        $this->lowestNewPriceCurrencyCode = $lowestNewPriceCurrencyCode;
-        $this->lowestNewPriceFormattedPrice = $lowestNewPriceFormattedPrice;
-        $this->LowestUsedPriceAmount = $LowestUsedPriceAmount;
-        $this->lowestUsedPriceCurrencyCode = $lowestUsedPriceCurrencyCode;
-        $this->lowestUsedPriceFormattedPrice = $lowestUsedPriceFormattedPrice;
-        $this->lowestCollectiblePriceAmount = $lowestCollectiblePriceAmount;
-        $this->lowestCollectiblePriceCurrencyCode = $lowestCollectiblePriceCurrencyCode;
-        $this->lowestCollectiblePriceFormattedPrice = $lowestCollectiblePriceFormattedPrice;
-        $this->images = $images;
-        $this->similar_products = $similar_products;
+		$this->id                                   = $id;
+		$this->keyValue                             = $keyValue;
+		$this->keyType                              = $keyType;
+		$this->asin                                 = $asin;
+		$this->detailPageURL                        = $detailPageURL;
+		$this->itemLinks                            = $itemLinks;
+		$this->salesRank                            = $salesRank;
+		$this->author                               = $author;
+		$this->type                                 = $type;
+		$this->brand                                = $brand;
+		$this->department                           = $department;
+		$this->color                                = $color;
+		$this->EAN                                  = $EAN;
+		$this->feature                              = $feature;
+		$this->genre                                = $genre;
+		$this->isAdultProduct                       = $isAdultProduct;
+		$this->isAutographed                        = $isAutographed;
+		$this->isMemorabilia                        = $isMemorabilia;
+		$this->itemDimensions                       = $itemDimensions;
+		$this->label                                = $label;
+		$this->languages                            = $languages;
+		$this->listPriceAmount                      = $listPriceAmount;
+		$this->listPriceCurrencyCode                = $listPriceCurrencyCode;
+		$this->listPriceFormattedPrice              = $listPriceFormattedPrice;
+		$this->manufacturer                         = $manufacturer;
+		$this->productGroup                         = $productGroup;
+		$this->productTypeName                      = $productTypeName;
+		$this->publisher                            = $publisher;
+		$this->title                                = $title;
+		$this->lowestNewPriceAmount                 = $lowestNewPriceAmount;
+		$this->lowestNewPriceCurrencyCode           = $lowestNewPriceCurrencyCode;
+		$this->lowestNewPriceFormattedPrice         = $lowestNewPriceFormattedPrice;
+		$this->LowestUsedPriceAmount                = $LowestUsedPriceAmount;
+		$this->lowestUsedPriceCurrencyCode          = $lowestUsedPriceCurrencyCode;
+		$this->lowestUsedPriceFormattedPrice        = $lowestUsedPriceFormattedPrice;
+		$this->lowestCollectiblePriceAmount         = $lowestCollectiblePriceAmount;
+		$this->lowestCollectiblePriceCurrencyCode   = $lowestCollectiblePriceCurrencyCode;
+		$this->lowestCollectiblePriceFormattedPrice = $lowestCollectiblePriceFormattedPrice;
+		$this->images                               = $images;
+		$this->similar_products                     = $similar_products;
 
-        $this->categories = $categories;
-        $this->rrfs = $rrfs;
-        $this->mpn = $mpn;
-        $this->merchant = $merchant;
-        $this->warranty = $warranty;
-        $this->image_sets = $image_sets;
-        $this->amountSaved = $amountSaved;
-        $this->availablity = $availability;
-        $this->freeShippingMessage = $freeShippingMessage;
-        $this->customerReview = $customerReview;
-        $this->editorialReview = $editorialReview;
-    }
+		$this->categories          = $categories;
+		$this->rrfs                = $rrfs;
+		$this->mpn                 = $mpn;
+		$this->merchant            = $merchant;
+		$this->warranty            = $warranty;
+		$this->image_sets          = $image_sets;
+		$this->amountSaved         = $amountSaved;
+		$this->availablity         = $availability;
+		$this->freeShippingMessage = $freeShippingMessage;
+		$this->customerReview      = $customerReview;
+		$this->editorialReview     = $editorialReview;
 
-	public function getId():String {
-        return $this->id;
-    }
+		$this->UPC = $UPC;
+	}
 
-    public function getKeyType() {
-        return $this->keyType;
-    }
+	public function __toString() {
+		return $this->asin;
+	}
+
+	public function getId(): String {
+		return $this->id;
+	}
+
+	public function getKeyType() {
+		return $this->keyType;
+	}
 
 	public function getKeyValue() {
 		return $this->keyValue;
 	}
 
-	public function getDescription():String {
-        return "";
-    }
+	public function getDescription(): String {
+		return $this->title;
+	}
+
+	public function getUPC() {
+        return $this->UPC;
+	}
 
 	public function getUPCEAN():String {
-        return "";
+        if ($this->keyValue=="UPC") {
+            return $this->UPC;
+        } else {
+	        return $this->EAN;
+        }
     }
 
-    public function getCompetitivePrice():float {
-        return 0.00;
+    public function getCompetitivePrice() {
+        return $this->competitivePrice;
     }
+
+    public function setCompetitivePrice(float $competitivePrice) {
+        $this->competitivePrice = $competitivePrice;
+    }
+
+	public function getCost() {
+		return $this->cost;
+	}
+
+	public function setCost(float $cost) {
+		$this->cost = $cost;
+	}
 
 	public function getNumberOfCompetitiveSellers():int {
-        return 0;
+        return is_null($this->numberOfCompetitiveSellers)?0:$this->numberOfCompetitiveSellers;
     }
 
 	public function get30Days():float {
-        return $this->t30days;
+        return empty($this->t30days)?0.00:$this->t30days;
     }
+
+	public function set30Days(float $T30days) {
+		$this->t30days = $T30days;
+	}
 
 	public function get6Months():float {
-		return $this->t6months;
+		return empty($this->t6months)?0.00:$this->t6months;
     }
 
+	public function set6months(float $T6months) {
+		$this->t6months = $T6months;
+	}
+
 	public function get12months():float {
-        return $this->t12months;
+		return empty($this->t12months)?0.00:$this->t12months;
     }
+
+	public function set12months(float $T12months) {
+		$this->t12months = $T12months;
+	}
 
 	public function get30DaysSalesCount():float {
 		return $this->t30daysSalesCount;
+	}
+
+	public function set30DaysSalesCount(float $T30daysSalesCount) {
+		$this->t30daysSalesCount = $T30daysSalesCount;
 	}
 
 	public function get6MonthsSalesCount():float {
 		return $this->t6monthsSalesCount;;
 	}
 
+	public function set6monthsSalesCount(float $T6monthsSalesCount) {
+		$this->t6monthsSalesCount = $T6monthsSalesCount;
+	}
+
 	public function get12monthsSalesCount():float {
 		return $this->t12monthsSalesCount;;
 	}
 
-	public function getCost():float {
-        return 0.00;
+	public function set12monthsSalesCount(float $T12monthsSalesCount) {
+		$this->t12monthsSalesCount = $T12monthsSalesCount;
+	}
+
+	public function getSoldByAmazon() {
+        return $this->soldByAmazon || $this->soldByAmazon == 1?true:false;
     }
 
-	public function getSoldByAmazon():bool {
-        return true;
+    public function setSoldByAmazon(bool $soldByAmazon) {
+        $this->soldByAmazon = $soldByAmazon;
     }
 
-	public function getMarginPerc():float {
-        return 0.00;
+	public function getMarginAmt(float $cost):float {
+	    $price = $this->listPriceAmount / 100;
+	    $diff = $price - $cost;
+        return (float) number_format((float)$diff, 2, '.', '');
     }
 
-	public function getMarginAmt():float {
-        return 0.00;
+	public function getMarginPerc(float $cost):float {
+		$price = $this->listPriceAmount / 100;
+		$diff = $price - $cost;
+		$perc = $diff / $price * 100;
+        return (float)number_format((float)$perc, 2, '.', '');
     }
 
     public function getImageSets() {
@@ -754,8 +814,44 @@ class AmazonProduct implements IAmazonProduct
         return $this->editorialReview;
     }
 
+    public function addCost($cost) {
+
+	    global $conn;
+	    $amazondb = new AmazonDB($conn);
+
+	    $keyTypeSafe = mysqli_real_escape_string($conn, $this->keyType);
+	    $keyValueSafe = mysqli_real_escape_string($conn, $this->keyValue);
+
+	    $costSafe = mysqli_real_escape_string($conn, $cost);
+	    $sql = "UPDATE `wp_amazon_amazon_products` SET 
+                  `cost` = $costSafe
+                  WHERE `keyValue` = '$keyValueSafe' AND `keyType`='$keyTypeSafe'";
+	    $amazondb->query($sql);
+
+	    $this->cost = $cost;
+
+	     $transient = new Transient($conn);
+	     $transient->save('product' . $this->keyValue, $this, 3600 * 24 * 1);
+
+    }
+
 	public function addSalesData(array $salesData):bool {
 
+
+        /*
+         				$salesData = array(
+					"30days" => $t30days,
+					"6months" => $t6months,
+					"12months" => $t12months,
+					"30daysSalesCount" => $t30daysSalesCount,
+					"6monthsSalesCount" => $t6monthsSalesCount,
+					"12monthsSalesCount" => $t12monthsSalesCount,
+					"soldByAmazon" => $soldByAmazon,
+					"competitivePrice"=> $competitivePrice,
+                     "numberOfCompetitiveSellers" => $numberOfCompetitiveSellers
+				);
+
+         */
         global $conn;
         $amazondb = new AmazonDB($conn);
 
@@ -765,6 +861,11 @@ class AmazonProduct implements IAmazonProduct
 		$T30daysSalesCountSafe = mysqli_real_escape_string($conn, $salesData["30daysSalesCount"]);
 		$T6monthsSalesCountSafe = mysqli_real_escape_string($conn, $salesData["6monthsSalesCount"]);
 		$T12monthsSalesCountSafe = mysqli_real_escape_string($conn, $salesData["12monthsSalesCount"]);
+		$T12monthsSalesCountSafe = mysqli_real_escape_string($conn, $salesData["12monthsSalesCount"]);
+		$competitivePriceSafe = mysqli_real_escape_string($conn, $salesData["competitivePrice"]);
+		$numberOfCompetitiveSellersSafe = mysqli_real_escape_string($conn, $salesData["numberOfCompetitiveSellers"]);
+
+		$soldByAmazonSafe = $salesData["soldByAmazon"]?1:0;
 
 		$keyTypeSafe = mysqli_real_escape_string($conn, $this->keyType);
 		$keyValueSafe = mysqli_real_escape_string($conn, $this->keyValue);
@@ -775,7 +876,10 @@ class AmazonProduct implements IAmazonProduct
                   `T12months` = '$T12monthsSafe',
                   `T30daysSalesCount` = '$T30daysSalesCountSafe',
                   `T6monthsSalesCount` = '$T6monthsSalesCountSafe',
-                  `T12monthsSalesCount` = '$T12monthsSalesCountSafe'
+                  `T12monthsSalesCount` = '$T12monthsSalesCountSafe',
+                  `soldByAmazon` = $soldByAmazonSafe,
+                  `competitivePrice` = $competitivePriceSafe,
+                  `numberOfCompetitiveSellers` = $numberOfCompetitiveSellersSafe
                   WHERE `keyValue` = '$keyValueSafe' AND `keyType`='$keyTypeSafe'";
 		$amazondb->query($sql);
 
@@ -785,6 +889,12 @@ class AmazonProduct implements IAmazonProduct
 		$this->t30daysSalesCount = $salesData["30daysSalesCount"];
 		$this->t6monthsSalesCount = $salesData["6monthsSalesCount"];
 		$this->t12monthsSalesCount = $salesData["12monthsSalesCount"];
+		$this->competitivePrice = $salesData["competitivePrice"];
+		$this->soldByAmazon = $salesData["soldByAmazon"];
+        $this->numberOfCompetitiveSellers = $salesData["numberOfCompetitiveSellers"];
+
+		$transient = new Transient($conn);
+		$transient->save('product' . $this->keyValue, $this, 3600 * 24 * 1);
 
 		return true;
 

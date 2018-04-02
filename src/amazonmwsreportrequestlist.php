@@ -46,9 +46,12 @@ class AmazonMWSReportRequestList extends \AmazonReportRequestList implements IAm
 	 * @see https://docs.developer.amazonservices.com/en_DE/reports/Reports_GetReportRequestList.html
 	 */
 	public function fetchRequestList($r = true){
+
+
 		try {
 			$ok = parent::fetchRequestList( $r );
 		} catch(\Exception $e) {
+			var_dump($e->getMessage());
 			$ok = false;
 		}
 

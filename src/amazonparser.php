@@ -170,6 +170,8 @@ class AmazonParser implements IAmazonParser
 
                 $rrfs = $this->get_rrfs($item, array(), $categories);
 
+	            $UPC = isset($item_attributes["UPC"])?$item_attributes["UPC"]:"";
+
                 // $rrfs = array();
 
               //  var_dump($similar_products);
@@ -224,13 +226,15 @@ class AmazonParser implements IAmazonParser
 	                !isset($offers['Offer']) ?null:(string) $offers['Offer']->OfferListing->Availability,
 	                !isset($offers['Offer']) ?null:(string) '0' == $offers['Offer']->OfferListing->IsEligibleForSuperSaverShipping ? 'Not available for free shipping' : 'Available for free shipping',
                     (string) $item_links['All Customer Reviews'],
-                    is_object($item->EditorialReviews) && is_object($item->EditorialReviews->EditorialReview) ? (string) $item->EditorialReviews->EditorialReview->Content:""
+                    is_object($item->EditorialReviews) && is_object($item->EditorialReviews->EditorialReview) ? (string) $item->EditorialReviews->EditorialReview->Content:"",
+	                $UPC
                 );
 
                 //var_dump('3');
                 //die();
 
-                AmazonCache::cacheProduct($product, '', $related_products);
+                $product = AmazonCache::cacheProduct($product, '', $related_products);
+
                 try {
                     // This only gets the product if it has an average RFF greater than 0.
                     $product = AmazonCache::getProduct($product->getAsin());
@@ -343,7 +347,7 @@ class AmazonParser implements IAmazonParser
 
         $products = array();
 
-     //   header( 'Content-Type:application/xml' );
+     //  header( 'Content-Type:application/xml' );
       //  echo $search_results_xml;
       //  die();
 
@@ -504,6 +508,8 @@ class AmazonParser implements IAmazonParser
 
                 $availability = isset($offers['Offer']) ? (string) $offers['Offer']->OfferListing->Availability : null;
 
+                $UPC = isset($item_attributes["UPC"])?$item_attributes["UPC"]:"";
+
 	            $product = new \kdaviesnz\amazon\AmazonProduct(
                 	null,
 	                $keyType,
@@ -555,8 +561,10 @@ class AmazonParser implements IAmazonParser
                     $availability, // 45
 	                isset($offers['Offer']) ? '0' == (string) $offers['Offer']->OfferListing->IsEligibleForSuperSaverShipping ? 'Not available for free shipping' : 'Available for free shipping':null,
                     $customerReviewsLink,
-                    !empty( $editorialReview ) ? $editorialReview: 'blank'
+                    !empty( $editorialReview ) ? $editorialReview: 'blank',
+	                $UPC
                 );
+
 
                 AmazonCache::cacheProduct( $product, '', $related_products );
             }
@@ -613,16 +621,21 @@ class AmazonParser implements IAmazonParser
     }
 
 
-
     private function get_rrfs( $item, $rrfs, $categories ) {
 
         foreach ( $categories as $category ) {
-            $rrf = (int) $item->SalesRank / $category->get_number_of_items();
-            $rrfs[ $category->get_category_id() ] = $rrf;
-            $ancestor_categories = $category->get_ancestor_categories();
-            if ( ! empty( $ancestor_categories ) ) {
-                $rrfs = $this->get_rrfs( $item, $rrfs, $ancestor_categories );
-            }
+
+        	if ($category->get_number_of_items() > 0) {
+		        $rrf = (int) $item->SalesRank / $category->get_number_of_items();
+	        } else {
+		        $rrf = 0;
+	        }
+	        $rrfs[ $category->get_category_id() ] = $rrf;
+	        $ancestor_categories                  = $category->get_ancestor_categories();
+	        if ( ! empty( $ancestor_categories ) ) {
+		        $rrfs = $this->get_rrfs( $item, $rrfs, $ancestor_categories );
+	        }
+
         }
         return $rrfs;
     }

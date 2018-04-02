@@ -2,6 +2,7 @@
 
 
 
+
 $conn = mysqli_connect("localhost", "dbuser", "dbpassword", "dbname");
 
 if (!$conn) {
@@ -16,5 +17,6 @@ $options = array(
 			'amazon_access_key_id' => '',
 			'amazon_affiliate_link' => ''
 		)
-	)
+	),
+	'cache' => true
 );

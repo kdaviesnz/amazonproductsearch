@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Mar 24, 2018 at 06:09 PM
+-- Generation Time: Apr 02, 2018 at 09:26 AM
 -- Server version: 5.6.38
 -- PHP Version: 7.2.1
 
@@ -17,10 +17,6 @@ SET time_zone = "+00:00";
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
 /*!40101 SET NAMES utf8mb4 */;
-
---
--- Database: `kdavies_jeffw`
---
 
 -- --------------------------------------------------------
 
@@ -92,7 +88,12 @@ CREATE TABLE `wp_amazon_amazon_products` (
   `T12months` float DEFAULT NULL,
   `T30daysSalesCount` int(11) DEFAULT NULL,
   `T6monthsSalesCount` int(11) DEFAULT NULL,
-  `T12monthsSalesCount` int(11) DEFAULT NULL
+  `T12monthsSalesCount` int(11) DEFAULT NULL,
+  `soldByAmazon` tinyint(4) DEFAULT NULL,
+  `competitivePrice` float DEFAULT NULL,
+  `cost` float DEFAULT NULL,
+  `UPC` varchar(50) DEFAULT NULL,
+  `numberOfCompetitiveSellers` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------
@@ -220,9 +221,9 @@ CREATE TABLE `wp_amazon_post_amazon_products` (
 --
 
 CREATE TABLE `wp_amazon_product_categories` (
-  `keyValue` varchar(20) NOT NULL,
-  `categoryID` varchar(20) NOT NULL,
-  `categoryName` varchar(50) NOT NULL,
+  `productID` int(20) NOT NULL,
+  `searchPhrase` varchar(50) NOT NULL,
+  `searchIndex` varchar(50) NOT NULL,
   `RRF` float NOT NULL,
   `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -413,7 +414,7 @@ ALTER TABLE `wp_amazon_post_amazon_products`
 -- Indexes for table `wp_amazon_product_categories`
 --
 ALTER TABLE `wp_amazon_product_categories`
-  ADD PRIMARY KEY (`keyValue`,`categoryID`);
+  ADD PRIMARY KEY (`productID`,`searchPhrase`,`searchIndex`);
 
 --
 -- Indexes for table `wp_amazon_product_features`
@@ -477,13 +478,13 @@ ALTER TABLE `wp_amazon_search`
 -- AUTO_INCREMENT for table `wp_amazon_amazon_products`
 --
 ALTER TABLE `wp_amazon_amazon_products`
-  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=62;
 
 --
 -- AUTO_INCREMENT for table `wp_amazon_options`
 --
 ALTER TABLE `wp_amazon_options`
-  MODIFY `option_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `option_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=487;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

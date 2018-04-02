@@ -58,9 +58,14 @@ class AmazonMWSReportRequest extends \AmazonReportRequest implements IAmazonMWSR
 	 */
 	public function requestReport() {
 
+
+		// @see http://docs.developer.amazonservices.com/en_ES/reports/Reports_RequestReport.html
 		try {
+			// Returns false if there is an error
 			$ok = parent::requestReport();
+			//var_dump($this->getLastErrorMessage()); // Parameter AWSAccessKeyId cannot be empty
 		} catch(\Exception $e) {
+			var_dump($e->getMessage());
 			$ok = false;
 		}
 

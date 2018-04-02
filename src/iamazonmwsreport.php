@@ -6,7 +6,7 @@ namespace kdaviesnz\amazon;
 
 interface IAmazonMWSReport {
 
-	public function writeReport();
+	public function writeReport(String $generatedReportId);
 
 	// These methods are set by the parent class
 

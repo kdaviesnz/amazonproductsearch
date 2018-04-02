@@ -61,8 +61,13 @@ class AmazonDB implements IAmazonDB {
 	 * @return string|void Sanitized query string, if there is a query to prepare.
 	 */
 	public function prepare( String $query, String $args ) : String{
+
 		if ( is_null( $query ) )
 			return "";
+
+		if (empty($args)) {
+			return $query;
+		}
 
 		$args = func_get_args();
 		array_shift( $args );
@@ -82,7 +87,7 @@ class AmazonDB implements IAmazonDB {
 		$result = mysqli_query($this->conn, $query);
 
 		if (is_bool($result)) {
-			var_dump($query);
+			echo($query);
 			throw new \Exception(("Database error:".mysqli_error($this->conn)));
 		}
 

@@ -72,6 +72,7 @@ class Transient implements ITransient {
 					$update = false;
 				} else {
 					$this->update_option( $transient_timeout, time() + $expiration );
+					$result = $this->update_option( $transient_option, $value);
 				}
 			} else {
 				$result = true;
@@ -117,9 +118,22 @@ class Transient implements ITransient {
 			return false;
 
 		$serialized_value = $this->maybe_serialize( $value );
+
 		$autoload = ( 'no' === $autoload || false === $autoload ) ? 'no' : 'yes';
 
-		$result = $this->amazonDB->query( $this->amazonDB->prepare( "INSERT INTO `wp_amazon_options` (`option_name`, `option_value`, `autoload`) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE `option_name` = VALUES(`option_name`), `option_value` = VALUES(`option_value`), `autoload` = VALUES(`autoload`)", $option, $serialized_value, $autoload ) );
+		if (!$serialized_value) {
+			$serialized_value = $value;
+		}
+
+		global $conn;
+		$optionSafe = mysqli_real_escape_string($conn, $option);
+		$serialized_valueSafe = mysqli_real_escape_string($conn, (String)$serialized_value);
+		$autoloadSafe = mysqli_real_escape_string($conn, $autoload);
+
+		$sql = "INSERT INTO `wp_amazon_options` (`option_name`, `option_value`, `autoload`) VALUES ('$optionSafe', '$serialized_valueSafe', '$autoloadSafe') ON DUPLICATE KEY UPDATE `option_name` = '$optionSafe', `option_value` = '$serialized_valueSafe', `autoload` = '$autoloadSafe'";
+
+		$result = $this->amazonDB->query( $sql );
+
 
 		return $result;
 
@@ -141,6 +155,10 @@ class Transient implements ITransient {
         }
 
 		$serialized_value = $this->maybe_serialize( $value );
+
+		if (!$serialized_value) {
+			return false;
+		}
 
 		$autoload = ( 'no' === $autoload || false === $autoload ) ? 'no' : 'yes';
 
@@ -176,13 +194,18 @@ class Transient implements ITransient {
 
 	private function maybe_serialize( $data ) {
 
-	        if ( is_array( $data ) || is_object( $data ) )
-	                return serialize( $data );
+		try {
+			if ( is_array( $data ) || is_object( $data ) ) {
+				return serialize( $data );
+			}
 
-	        if ( $this->is_serialized( $data, false ) )
-	                return serialize( $data );
+			if ( $this->is_serialized( $data, false ) ) {
+				return serialize( $data );
+			}
+		} catch(\Exception $e) {
+			return false;
+		}
 
-	        return $data;
 	}
 
 	private function maybe_unserialize( $original ) {

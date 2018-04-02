@@ -26,7 +26,7 @@ class AmazonCache implements IAmazonCache
     public static function generate_products( $records) {
         foreach ($records as $record) {
             // $products[] = AmazonCache::getProduct($record->AIN, '');
-            yield AmazonCache::getProduct($record->AIN, '');
+            yield AmazonCache::getProduct($record->keyValue, '');
         }
     }
 
@@ -262,84 +262,51 @@ class AmazonCache implements IAmazonCache
      * @param string $searchTerm
      * @return array Array of IAmazonProducts
      */
-    public static function performCachedSearch($searchTerm, $searchType ) {
+    public static function performCachedSearch($searchPhrase, $searchIndex ) {
 
 	    global $conn;
-	    $transient = new Transient($conn);
-        $products = $transient->fetch('search' . $searchTerm . $searchType);
+	 //   $transient = new Transient($conn);
+      //  $products = $transient->fetch('search' . $searchTerm . $searchType);
+	    $amazondb = new AmazonDB( $conn);
 
-        if (empty($products)) {
-
-            $amazondb = new AmazonDB( $conn);
-
-            // Remove stale searches.
-            $sql = $amazondb->prepare(
-                "DELETE FROM `wp_amazon_search` WHERE DATEDIFF( NOW(), `search_date` )  > 1",
-                ''
-            );
-	        $amazondb->query($sql);
-            if (!empty($amazondb->last_error)) {
-                echo $amazondb->last_error;
-                throw new \Exception($amazondb->last_error);
-            }
-
-            $sql = $amazondb->prepare(
-                "SELECT `searchTerm`, `keyValue` FROM `wp_amazon_search` 
-              WHERE `searchTerm` = '%s'
-              AND `searchType` = '%s'
-              AND DATEDIFF( NOW(), `search_date` )  < 1",
-                $searchTerm,
-                $searchType
-            );
-
-            $records = $amazondb->get_results($sql);
-            if (!empty($amazondb->last_error)) {
-                echo $amazondb->last_error;
-                throw new \Exception($amazondb->last_error);
-            }
+	    $searchPhraseSafe = mysqli_real_escape_string($conn, $searchPhrase);
+	    $searchIndexSafe = mysqli_real_escape_string($conn, $searchIndex);
 
 
-            $products = array();
+	    $sql = "SELECT `wp_amazon_product_categories`.`productID`, `wp_amazon_amazon_products`.`keyType`, `wp_amazon_amazon_products`.`keyValue`
+				FROM `wp_amazon_product_categories`, `wp_amazon_amazon_products`
+				WHERE `wp_amazon_product_categories`.`searchPhrase` = '$searchPhraseSafe' 
+				AND `wp_amazon_product_categories`.`searchIndex` = '$searchIndexSafe'
+				AND `wp_amazon_product_categories`.`productID`= `wp_amazon_amazon_products`.`id`";
 
+	    $rows = $amazondb->get_results($sql);
 
-            if (!empty($records)) {
-                /*
-                foreach ($records as $record) {
-                    $products[] = AmazonCache::getProduct($record->AIN, '');
-                }
-                */
-                foreach ( AmazonCache::generate_products( $records ) as $record ) {
-                    $products[] = $record;
-                }
+	    $products = array(
+	        "items"=>array()
+	    );
 
-            } else {
-                throw new \Exception('No products found.');
-            }
+	    foreach ($rows as $row) {
+	    	$product = AmazonCache::getProduct($row->keyValue);
+		    $products["items"][] = AmazonCache::getProduct($row->keyValue);
+	    }
 
-            // Cache for 1 days.
-	        $transient->save('search' . $searchTerm . $searchType, $products, 3600 * 24 * 1);
-
-        }
-        
         return $products;
 
     }
 
-    public static function cacheSearch( $searchTerm, $products, $searchType ) {
+    public static function cacheSearch( $searchPhrase, $products, $searchIndex ) {
 
         global $conn;
 
         $amazondb = new AmazonDB($conn);
-
+        $searchPhraseSafe = mysqli_real_escape_string($conn, $searchPhrase);
+	    $searchIndexSafe = mysqli_real_escape_string($conn, $searchIndex);
 
         foreach( $products as $product ) {
 
-            $sql = $amazondb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_search` (`searchTerm`, `keyValue`, `searchType`) VALUES ('%s', '%s', '%s');",
-                $searchTerm,
-                $product->getKeyValue(),
-                $searchType
-            );
+        	$productIDSafe = mysqli_real_escape_string($conn, $product->getID());
+
+            $sql = "INSERT IGNORE INTO `wp_amazon_product_categories` (`productID`, `searchPhrase`, `searchIndex`) VALUES ('$productIDSafe', '$searchPhraseSafe', '$searchIndexSafe');";
 
 	        $amazondb->query( $sql );
             $error = $amazondb->last_error;
@@ -512,8 +479,10 @@ class AmazonCache implements IAmazonCache
 	    $transient = new Transient($conn);
 	    $data = $transient->fetch('product' . $keyValue);
 
+		$data = null;
 
         if (empty($data)) {
+
 
             $amazonDB = new AmazonDB($conn);
 
@@ -564,15 +533,24 @@ class AmazonCache implements IAmazonCache
                  `availability`,
                  `freeShippingMessage`,
                  `customerReview`,
-                 `editorialReview`
+                 `editorialReview`,
+                 `T30days`,
+                 `T6months`,
+                 `T12months`,
+                 `T30daysSalesCount`,
+                 `T6monthsSalesCount`,
+                 `T12monthsSalesCount`,
+                 `soldByAmazon`,
+                 `competitivePrice`,
+                 `UPC`
                   FROM `wp_amazon_amazon_products`
                   WHERE `keyValue` IN ('$keyValue_string')
                   AND DATEDIFF(NOW(), `last_updated`)  < 1
                   AND `avgRRF` > -1",
                 '');
 
-            $records = $amazonDB->get_results($sql);
 
+            $records = $amazonDB->get_results($sql);
 
             if (!empty($amazonDB->last_error)) {
                 echo $amazonDB->last_error;
@@ -580,16 +558,15 @@ class AmazonCache implements IAmazonCache
                 throw new \Exception($amazonDB->last_error);
             }
 
+
             if (empty($records)) {
                 throw new \Exception('Product not found when searching cache - ' . $keyValue_string);
             }
 
             $products = array();
+	        $similar_products = array();
 
             foreach ($records as $product_record) {
-
-                $similar_products = array();
-
 
                 $sql = $amazonDB->prepare(
                     "SELECT `frequentlyBoughtTogether` FROM `wp_amazon_product_frequently_bought_together` where `keyValue` = '%s' AND `keyValue` <> `frequentlyBoughtTogether`",
@@ -615,6 +592,7 @@ class AmazonCache implements IAmazonCache
                 $categories = array();
                 $rrfs = array();
 
+                /*
                 $sql = $amazonDB->prepare(
                     "SELECT `wp_amazon_product_categories`.`categoryID`, `wp_amazon_product_categories`.`categoryName`, `wp_amazon_product_categories`.`RRF`, `wp_amazon_amazon_categories`.`number_items` FROM `wp_amazon_product_categories`, `wp_amazon_amazon_categories` WHERE `keyValue` = '%s' AND `wp_amazon_product_categories`.`categoryID` = `wp_amazon_amazon_categories`.`category_id`",
                     $keyValue
@@ -624,6 +602,8 @@ class AmazonCache implements IAmazonCache
                     echo $amazonDB->last_error;
                     throw new \Exception($amazonDB->last_error);
                 }
+                */
+                $records = array();
                 if (!empty($records)) {
                     foreach ($records as $record) {
                         $ancestors = AmazonCache::getAncestorCategories(array(), $record->categoryID, 1);
@@ -805,10 +785,23 @@ class AmazonCache implements IAmazonCache
                     (string) $product_record->availability,
                     (string) $product_record->freeShippingMessage,
                     (string) $product_record->customerReview,
-                    (string) $product_record->editorialReview
+                    (string) $product_record->editorialReview,
+	                (string) $product_record->UPC
                 );
 
-                $products[] = $product;
+
+                $product->set30Days( empty($product_record->T30days)?0.00:$product_record->T30days );
+	            $product->set6months(empty($product_record->T6months)?0.00: $product_record->T6months);
+                $product->set12months(empty($product_record->T12months)?0.00: $product_record->T12months);
+	            $product->set30DaysSalesCount(empty($product_record->T30daysSalesCount)?0:(int) $product_record->T30daysSalesCount);
+	            $product->set6monthsSalesCount(empty($product_record->T6monthsSalesCount)?0:(int) $product_record->T6monthsSalesCount);
+	            $product->set12monthsSalesCount(empty($product_record->T12monthsSalesCount)?0:(int) $product_record->T12monthsSalesCount);
+
+	            $product->setCompetitivePrice(empty($product_record->competitivePrice)?0.00:$product_record->competitivePrice);
+
+	            $product->setSoldByAmazon(empty($product_record->soldByAmazon)?false:$product_record->soldByAmazon==1);
+
+	            $products[] = $product;
 
             }
 
@@ -826,62 +819,105 @@ class AmazonCache implements IAmazonCache
     public static function cacheProduct( IAmazonProduct $product, $relationshipType, $related_products = array() ) {
 
 
-        global $conn;
-        $amazondb = new AmazonDB($conn);
+	    global $conn;
+	    $amazondb = new AmazonDB( $conn );
 
-        // Search for matching product.
-	    $keyTypeSafe = mysqli_real_escape_string($conn, $product->getKeyType());
-	    $keyValueSafe = mysqli_real_escape_string($conn, $product->getKeyValue());
+	    // Search for matching product.
+	    $keyTypeSafe  = mysqli_real_escape_string( $conn, $product->getKeyType() );
+	    $keyValueSafe = mysqli_real_escape_string( $conn, $product->getKeyValue() );
 
 	    $sql = "SELECT `id` FROM `wp_amazon_amazon_products` WHERE `keyValue` = '$keyValueSafe' AND `keyType` = '$keyTypeSafe'";
 
-	    $results = $amazondb->get_results($sql);
+	    $results = $amazondb->get_results( $sql );
 
-	    if (!empty($results)) {
-	    	$id = $results[0]->id;
+	    $titleSafe                                = mysqli_real_escape_string( $conn, $product->getTitle() );
+	    $detailPageUrlSafe                        = mysqli_real_escape_string( $conn, $product->getDetailPageURL() );
+	    $salesRankSafe                            = mysqli_real_escape_string( $conn, $product->getSalesRank() );
+	    $authorSafe                               = mysqli_real_escape_string( $conn, $product->getAuthor() );
+	    $brandSafe                                = mysqli_real_escape_string( $conn, $product->getBrand() );
+	    $departmenSafe                            = mysqli_real_escape_string( $conn, $product->getDepartment() );
+	    $colorSafe                                = mysqli_real_escape_string( $conn, $product->getColor() );
+	    $eanSafe                                  = mysqli_real_escape_string( $conn, $product->getEAN() );
+	    $genreSafe                                = mysqli_real_escape_string( $conn, $product->getGenre() );
+	    $isAdultProductSafe                       = mysqli_real_escape_string( $conn, $product->isIsAdultProduct() );
+	    $isAutographedSafe                        = mysqli_real_escape_string( $conn, $product->isIsAutographed() );
+	    $isMemorabiliaSafe                        = mysqli_real_escape_string( $conn, $product->isIsMemorabilia() );
+	    $labelSafe                                = mysqli_real_escape_string( $conn, $product->getLabel() );
+	    $publisherSafe                            = mysqli_real_escape_string( $conn, $product->getPublisher() );
+	    $listPriceAmountSafe                      = mysqli_real_escape_string( $conn, $product->getListPriceAmount() );
+	    $listPriceCurrencyCodeSafe                = mysqli_real_escape_string( $conn, $product->getListPriceCurrencyCode() );
+	    $listPriceFormattedPriceSafe              = mysqli_real_escape_string( $conn, $product->getListPriceFormattedPrice() );
+	    $manufacturerSafe                         = mysqli_real_escape_string( $conn, $product->getManufacturer() );
+	    $productGroupSafe                         = mysqli_real_escape_string( $conn, $product->getProductGroup() );
+	    $productTypeNameSafe                      = mysqli_real_escape_string( $conn, $product->getProductTypeName() );
+	    $lowestNewPriceAmountSafe                 = mysqli_real_escape_string( $conn, $product->getLowestNewPriceAmount() );
+	    $lowestCollectiblePriceCurrencyCodeSafe   = mysqli_real_escape_string( $conn, $product->getLowestCollectiblePriceCurrencyCode() );
+	    $lowestNewPriceFormattedPriceSafe         = mysqli_real_escape_string( $conn, $product->getLowestNewPriceFormattedPrice() );
+	    $lowestUsedPriceAmountSafe                = mysqli_real_escape_string( $conn, $product->getLowestUsedPriceAmount() );
+	    $lowestUsedPriceCurrencyCodeSafe          = mysqli_real_escape_string( $conn, $product->getLowestUsedPriceCurrencyCode() );
+	    $lowestUsedPriceFormattedPriceSafe        = mysqli_real_escape_string( $conn, $product->getLowestUsedPriceFormattedPrice() );
+	    $lowestCollectiblePriceAmountSafe         = mysqli_real_escape_string( $conn, $product->getLowestCollectiblePriceAmount() );
+	    $lowestCollectiblePriceCurrencyCodeSafe   = mysqli_real_escape_string( $conn, $product->getLowestCollectiblePriceCurrencyCode() );
+	    $lowestCollectiblePriceFormattedPriceSafe = mysqli_real_escape_string( $conn, $product->getLowestCollectiblePriceFormattedPrice() );
+	    $typeSafe                                 = mysqli_real_escape_string( $conn, $product->getType() );
+	    $avgRRFSafe                               = mysqli_real_escape_string( $conn, $product->getAvgRRF() );
+	    $mpnSafe                                  = mysqli_real_escape_string( $conn, $product->getMpn() );
+	    $merchantSafe                             = mysqli_real_escape_string( $conn, $product->getMerchant() );
+	    $warrantySafe                             = mysqli_real_escape_string( $conn, $product->getWarranty() );
+	    $amountSavedSafe                          = mysqli_real_escape_string( $conn, $product->getAmountSaved() );
+	    $availabilitySafe                         = mysqli_real_escape_string( $conn, $product->getAvailability() );
+	    $freeShippingMessageSafe                  = mysqli_real_escape_string( $conn, $product->getFreeShippingMessage() );
+	    $customerReviewSafe                       = mysqli_real_escape_string( $conn, $product->getCustomerReview() );
+	    $editorialReviewSafe                      = mysqli_real_escape_string( $conn, $product->getEditorialReview() );
+	    $asinSafe                                 = mysqli_real_escape_string( $conn, $product->getAsin() );
+	    $UPCSafe                                  = mysqli_real_escape_string( $conn, $product->getUPC() );
+
+	    if ( ! empty( $results ) ) {
+		    $id  = $results[0]->id;
 		    $sql = $amazondb->prepare(
 			    "UPDATE `wp_amazon_amazon_products` SET			    
-            `title` = '{$product->getTitle()}', 
+            `title` = '$titleSafe', 
             `last_updated` = CURRENT_TIMESTAMP, 
-            `detailPageURL` = '{$product->getDetailPageURL()}', 
-            `salesRank` = '{$product->getSalesRank()}', 
-            `author` = '{$product->getAuthor()}', 
-            `brand` = '{$product->getBrand()}', 
-            `department` = '{$product->getDepartment()}', 
-            `color` = '{$product->getColor()}', 
-            `ean` = '{$product->getEAN()}', 
+            `detailPageURL` = '$detailPageUrlSafe', 
+            `salesRank` = '$salesRankSafe', 
+            `author` = '$authorSafe', 
+            `brand` = '$brandSafe', 
+            `department` = '$departmenSafe', 
+            `color` = '$colorSafe', 
+            `ean` = '$eanSafe', 
             `feature` = '', 
-            `genre` = '{$product->getGenre()}', 
-            `isAdultProduct` = '{$product->isIsAdultProduct()}', 
-            `isAutographed` = '{$product->isIsAutographed()}', 
-            `isMemorabilia` = '{$product->isIsMemorabilia()}', 
-            `label` = '{$product->getLabel()}', 
-            `publisher` = '{$product->getPublisher()}', 
-            `listPriceAmount` = '{$product->getListPriceAmount()}', 
-            `listPriceCurrencyCode` = '{$product->getListPriceCurrencyCode()}', 
-            `listPriceFormattedPrice` = '{$product->getListPriceFormattedPrice()}', 
-            `manufacturer` = '{$product->getManufacturer()}', 
-            `productGroup` = '{$product->getProductGroup()}', 
-            `productTypeName` = '{$product->getProductTypeName()}', 
-            `lowestNewPriceAmount` = '{$product->getLowestNewPriceAmount()}', 
-            `lowestNewPriceCurrencyCode` = '{$product->getLowestCollectiblePriceCurrencyCode()}', 
-            `lowestNewPriceFormattedPrice` = '{$product->getLowestNewPriceFormattedPrice()}', 
-            `lowestUsedPriceAmount` = '{$product->getLowestUsedPriceAmount()}', 
-            `lowestUsedPriceCurrencyCode` = '{$product->getLowestUsedPriceCurrencyCode()}', 
-            `lowestUsedPriceFormattedPrice` = '{$product->getLowestUsedPriceFormattedPrice()}', 
-            `lowestCollectiblePriceAmount` = '{$product->getLowestCollectiblePriceAmount()}', 
-            `lowestCollectiblePriceCurrencyCode` = '{$product->getLowestCollectiblePriceCurrencyCode()}',
-            `lowestCollectiblePriceFormattedPrice` = '{$product->getLowestCollectiblePriceFormattedPrice()}',
-            `binding` = '{$product->getType()}',
-            `avgRRF` = '{$product->getAvgRRF()}',
-            `mpn`='{$product->getMpn()}',
-            `merchant`='{$product->getMerchant()}',
-            `warranty`='{$product->getWarranty()}',
-            `amountSaved` = '{$product->getAmountSaved()}',
-            `availability` = '{$product->getAvailability()}',
-            `freeShippingMessage` = '{$product->getFreeShippingMessage()}',
-            `customerReview` = '{$product->getCustomerReview()}',
-            `editorialReview` = '{$product->getEditorialReview()}' WHERE `id` = '$id'",
+            `genre` = '$genreSafe', 
+            `isAdultProduct` = '$isAdultProductSafe', 
+            `isAutographed` = '$isAutographedSafe', 
+            `isMemorabilia` = '$isMemorabiliaSafe', 
+            `label` = '$labelSafe', 
+            `publisher` = '$publisherSafe', 
+            `listPriceAmount` = '$listPriceAmountSafe', 
+            `listPriceCurrencyCode` = '$listPriceCurrencyCodeSafe', 
+            `listPriceFormattedPrice` = '$listPriceFormattedPriceSafe', 
+            `manufacturer` = '$manufacturerSafe', 
+            `productGroup` = '$productGroupSafe', 
+            `productTypeName` = '$productTypeNameSafe', 
+            `lowestNewPriceAmount` = '$lowestNewPriceAmountSafe', 
+            `lowestNewPriceCurrencyCode` = '$lowestCollectiblePriceCurrencyCodeSafe', 
+            `lowestNewPriceFormattedPrice` = '$lowestNewPriceFormattedPriceSafe', 
+            `lowestUsedPriceAmount` = '$lowestUsedPriceAmountSafe', 
+            `lowestUsedPriceCurrencyCode` = '$lowestUsedPriceCurrencyCodeSafe', 
+            `lowestUsedPriceFormattedPrice` = '$lowestUsedPriceFormattedPriceSafe', 
+            `lowestCollectiblePriceAmount` = '$lowestCollectiblePriceAmountSafe', 
+            `lowestCollectiblePriceCurrencyCode` = '$lowestCollectiblePriceCurrencyCodeSafe',
+            `lowestCollectiblePriceFormattedPrice` = '$lowestCollectiblePriceFormattedPriceSafe',
+            `binding` = '$typeSafe',
+            `avgRRF` = '$avgRRFSafe',
+            `mpn`='$mpnSafe',
+            `merchant`='$merchantSafe',
+            `warranty`='$warrantySafe',
+            `amountSaved` = '$amountSavedSafe',
+            `availability` = '$availabilitySafe',
+            `freeShippingMessage` = '$freeShippingMessageSafe',
+            `customerReview` = '$customerReviewSafe',
+            `editorialReview` = '$editorialReviewSafe',
+             `UPC` = '$UPCSafe' WHERE `id` = '$id'",
 			    ""
 		    );
 
@@ -900,421 +936,433 @@ class AmazonCache implements IAmazonCache
   `lowestNewPriceFormattedPrice`, `lowestUsedPriceAmount`, `lowestUsedPriceCurrencyCode`, `lowestUsedPriceFormattedPrice`, `lowestCollectiblePriceAmount`, `lowestCollectiblePriceCurrencyCode`, `lowestCollectiblePriceFormattedPrice`, `binding`,`avgRRF`, 
   `mpn`, `merchant`, `warranty`, 
   `amountSaved`, `availability`, `freeShippingMessage`, 
-  `customerReview`, `editorialReview`) 
-VALUES ('$keyTypeSafe', '$keyValueSafe', '{$product->getAsin()}', 
-'{$product->getTitle()}', CURRENT_TIMESTAMP, '{$product->getDetailPageURL()}', 
-'{$product->getSalesRank()}', '{$product->getAuthor()}', '{$product->getBrand()}', 
-'{$product->getDepartment()}', '{$product->getColor()}', '{$product->getEAN()}', 
-'', '{$product->getGenre()}', '{$product->isIsAdultProduct()}', 
-'{$product->isIsAutographed()}', '{$product->isIsMemorabilia()}', '{$product->getLabel()}', 
-'{$product->getPublisher()}', '{$product->getListPriceAmount()}', '{$product->getListPriceCurrencyCode()}', 
-'{$product->getListPriceFormattedPrice()}', '{$product->getManufacturer()}', '{$product->getProductGroup()}', 
-'{$product->getProductTypeName()}', '{$product->getLowestNewPriceAmount()}', '{$product->getLowestCollectiblePriceCurrencyCode()}', 
-'{$product->getLowestNewPriceFormattedPrice()}', '{$product->getLowestUsedPriceAmount()}', '{$product->getLowestUsedPriceCurrencyCode()}', 
-'{$product->getLowestUsedPriceFormattedPrice()}', '{$product->getLowestCollectiblePriceAmount()}', '{$product->getLowestCollectiblePriceCurrencyCode()}', 
-'{$product->getLowestCollectiblePriceFormattedPrice()}', '{$product->getType()}', '{$product->getAvgRRF()}', 
-'{$product->getMpn()}', '{$product->getMerchant()}', '{$product->getWarranty()}', 
-'{$product->getAmountSaved()}', '{$product->getAvailability()}', '{$product->getFreeShippingMessage()}', 
-'{$product->getCustomerReview()}', '{$product->getEditorialReview()}')",
+  `customerReview`, `editorialReview`, `UPC`) 
+VALUES ('$keyTypeSafe', '$keyValueSafe', '$asinSafe', 
+'$titleSafe', CURRENT_TIMESTAMP, '$detailPageUrlSafe', 
+'$salesRankSafe', '$authorSafe', '$brandSafe', 
+'$departmenSafe', '$colorSafe', '$eanSafe', 
+'', '$genreSafe', '$isAdultProductSafe', 
+'$isAutographedSafe', '$isMemorabiliaSafe', '$labelSafe', 
+'$publisherSafe', '$listPriceAmountSafe', '$listPriceCurrencyCodeSafe', 
+'$listPriceFormattedPriceSafe', '$manufacturerSafe', '$productGroupSafe', 
+'$productTypeNameSafe', '$lowestNewPriceAmountSafe', '$lowestCollectiblePriceCurrencyCodeSafe', 
+'$lowestNewPriceFormattedPriceSafe', '$lowestUsedPriceAmountSafe', '$lowestUsedPriceCurrencyCodeSafe', 
+'$lowestUsedPriceFormattedPriceSafe', '$lowestCollectiblePriceAmountSafe', '$lowestCollectiblePriceCurrencyCodeSafe', 
+'$lowestCollectiblePriceFormattedPriceSafe', '$typeSafe', '$avgRRFSafe', 
+'$mpnSafe', '$merchantSafe', '$warrantySafe', 
+'$amountSavedSafe', '$availabilitySafe', '$freeShippingMessageSafe', 
+'$customerReviewSafe', '$editorialReviewSafe', '$UPCSafe')",
 			    ""
 		    );
 
 	    }
-	    $amazondb->query( $sql );
-        if ( ! empty( $amazondb->last_error ) ) {
-            echo $amazondb->last_error;
-            echo $sql;
-            throw new \Exception( $amazondb->last_error );
-        }
 
-        $product_links = $product->getItemLinks();
-        // Remove stale records.
-        $sql = $amazondb->prepare(
-            "DELETE FROM `wp_amazon_product_links` where DATEDIFF( NOW(), `last_updated` ) > 60",
-            ''
-        );
+
 	    $amazondb->query( $sql );
-        if ( ! empty( $amazondb->last_error ) ) {
-            echo $amazondb->last_error;
-            throw new \Exception( $amazondb->last_error );
-        }
-        foreach( $product_links as $link ) {
-            $sql = $amazondb->prepare(
-                "INSERT INTO `wp_amazon_product_links` (`keyValue`, `link`) VALUES ('%s', '%s')
+
+	    $id  = mysqli_insert_id( $conn );
+
+
+	    if ( ! empty( $amazondb->last_error ) ) {
+		    echo $amazondb->last_error;
+		    echo $sql;
+		    throw new \Exception( $amazondb->last_error );
+	    }
+
+	    $product_links = $product->getItemLinks();
+	    // Remove stale records.
+	    $sql = $amazondb->prepare(
+		    "DELETE FROM `wp_amazon_product_links` where DATEDIFF( NOW(), `last_updated` ) > 60",
+		    ''
+	    );
+	    $amazondb->query( $sql );
+	    if ( ! empty( $amazondb->last_error ) ) {
+		    echo $amazondb->last_error;
+		    throw new \Exception( $amazondb->last_error );
+	    }
+	    foreach ( $product_links as $link ) {
+		    $sql = $amazondb->prepare(
+			    "INSERT INTO `wp_amazon_product_links` (`keyValue`, `link`) VALUES ('%s', '%s')
                   ON DUPLICATE KEY UPDATE `link` = '%s';",
-                $product->getKeyValue(),
-                $link,
-                $link
-            );
-	        $amazondb->query( $sql );
-            if ( ! empty( $amazondb->last_error ) ) {
-                echo $amazondb->last_error;
-                throw new \Exception( $amazondb->last_error );
-            }
-        }
+			    $product->getKeyValue(),
+			    $link,
+			    $link
+		    );
+		    $amazondb->query( $sql );
+		    if ( ! empty( $amazondb->last_error ) ) {
+			    echo $amazondb->last_error;
+			    throw new \Exception( $amazondb->last_error );
+		    }
+	    }
 
-        $languages = $product->getLanguages();
-        foreach( $languages as $language ) {
-            $sql = $amazondb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_product_languages` (`keyValue`, `language`) VALUES ('%s', '%s');",
-                $product->getKeyValue(),
-                (string) is_object($language)?$language->Name:"Unknown"
-            );
-	        $amazondb->query( $sql );
-            if ( ! empty( $amazondb->last_error ) ) {
-                echo $amazondb->last_error;
-                throw new \Exception( $amazondb->last_error );
-            }
-        }
+	    $languages = $product->getLanguages();
+	    foreach ( $languages as $language ) {
+		    $sql = $amazondb->prepare(
+			    "INSERT IGNORE INTO `wp_amazon_product_languages` (`keyValue`, `language`) VALUES ('%s', '%s');",
+			    $product->getKeyValue(),
+			    (string) is_object( $language ) ? $language->Name : "Unknown"
+		    );
+		    $amazondb->query( $sql );
+		    if ( ! empty( $amazondb->last_error ) ) {
+			    echo $amazondb->last_error;
+			    throw new \Exception( $amazondb->last_error );
+		    }
+	    }
 
-        if ( !empty( $related_products ) ) {
-            //$related_products = $product->related_products($relationshipType);
-            foreach ($related_products as $related_product) {
-                $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_related_products` (`keyValue`, `relatedProductAIN`, `relationshipType`) VALUES ('%s', '%s', '%s');",
-                    $product->getKeyValue(),
-                    $related_product->getAsin(),
-                    $relationshipType
-                );
-	            $amazondb->query($sql);
-                if (!empty($amazondb->last_error)) {
-                    echo $amazondb->last_error;
-                    throw new \Exception($amazondb->last_error);
-                }
-            }
-        }
+	    if ( ! empty( $related_products ) ) {
+		    //$related_products = $product->related_products($relationshipType);
+		    foreach ( $related_products as $related_product ) {
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_related_products` (`keyValue`, `relatedProductAIN`, `relationshipType`) VALUES ('%s', '%s', '%s');",
+				    $product->getKeyValue(),
+				    $related_product->getAsin(),
+				    $relationshipType
+			    );
+			    $amazondb->query( $sql );
+			    if ( ! empty( $amazondb->last_error ) ) {
+				    echo $amazondb->last_error;
+				    throw new \Exception( $amazondb->last_error );
+			    }
+		    }
+	    }
 
 
-        $frequently_bought_together = $product->getSimilarProducts();
-        // Remove stale bundles.
-        // DELETE bundle records that are more than 3 days old.
-        $sql = $amazondb->prepare(
-            "DELETE FROM `wp_amazon_product_frequently_bought_together` 
+	    $frequently_bought_together = $product->getSimilarProducts();
+	    // Remove stale bundles.
+	    // DELETE bundle records that are more than 3 days old.
+	    $sql = $amazondb->prepare(
+		    "DELETE FROM `wp_amazon_product_frequently_bought_together` 
              WHERE DATEDIFF( NOW(), `last_updated` ) > 3",
-            ''
-        );
+		    ''
+	    );
 	    $amazondb->query( $sql );
-        if ( ! empty( $amazondb->last_error ) ) {
-            echo $amazondb->last_error;
-            throw new \Exception( $amazondb->last_error );
-        }
-        foreach( $frequently_bought_together as $frequently_bought_together_product ) {
-            $sql = $amazondb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_product_frequently_bought_together` (`keyValue`, `frequentlyBoughtTogether`) VALUES ('%s', '%s');",
-                $product->getKeyValue(),
-                (string) $frequently_bought_together_product->keyValue
-            );
-	        $amazondb->query( $sql );
-            if ( ! empty( $amazondb->last_error ) ) {
-                echo $amazondb->last_error;
-                throw new \Exception( $amazondb->last_error );
-            }
-        }
+	    if ( ! empty( $amazondb->last_error ) ) {
+		    echo $amazondb->last_error;
+		    throw new \Exception( $amazondb->last_error );
+	    }
+	    foreach ( $frequently_bought_together as $frequently_bought_together_product ) {
+		    $sql = $amazondb->prepare(
+			    "INSERT IGNORE INTO `wp_amazon_product_frequently_bought_together` (`keyValue`, `frequentlyBoughtTogether`) VALUES ('%s', '%s');",
+			    $product->getKeyValue(),
+			    (string) $frequently_bought_together_product->keyValue
+		    );
+		    $amazondb->query( $sql );
+		    if ( ! empty( $amazondb->last_error ) ) {
+			    echo $amazondb->last_error;
+			    throw new \Exception( $amazondb->last_error );
+		    }
+	    }
 
-        $images = $product->getImages();
-        // Remove stale images.
-        // Delete images that are more than a week old.
-        $sql = $amazondb->prepare(
-            "DELETE FROM `wp_amazon_product_images` where DATEDIFF( NOW(), `last_updated` ) > 7;",
-            ''
-        );
+	    $images = $product->getImages();
+	    // Remove stale images.
+	    // Delete images that are more than a week old.
+	    $sql = $amazondb->prepare(
+		    "DELETE FROM `wp_amazon_product_images` where DATEDIFF( NOW(), `last_updated` ) > 7;",
+		    ''
+	    );
 	    $amazondb->query( $sql );
-        if ( ! empty( $amazondb->last_error ) ) {
-            echo $amazondb->last_error;
-            throw new \Exception( $amazondb->last_error );
-        }
-        foreach( $images as $type=>$image ) {
-            $sql = $amazondb->prepare(
-                "INSERT INTO `wp_amazon_product_images` (`type`, `keyValue`, `src`, `height`, `width`) VALUES ('%s', '%s', '%s', '%s', '%s')
+	    if ( ! empty( $amazondb->last_error ) ) {
+		    echo $amazondb->last_error;
+		    throw new \Exception( $amazondb->last_error );
+	    }
+	    foreach ( $images as $type => $image ) {
+		    $sql = $amazondb->prepare(
+			    "INSERT INTO `wp_amazon_product_images` (`type`, `keyValue`, `src`, `height`, `width`) VALUES ('%s', '%s', '%s', '%s', '%s')
  ON DUPLICATE KEY UPDATE `type` = '%s', `src`='%s', `height`='%s', `width`='%s';",
-                $type,
-                $product->getKeyValue(),
-                (string) isset($image['src'])?$image['src']:$image['url'],
-                (int) $image['height'],
-                (int) $image['width'],
-                $type,
-                (string) isset($image['src'])?$image['src']:$image['url'],
-                (int) $image['height'],
-                (int) $image['width']
-            );
-	        $amazondb->query( $sql );
-            if ( ! empty( $amazondb->last_error ) ) {
-                echo $amazondb->last_error;
-                throw new \Exception( $amazondb->last_error );
-            }
-        }
+			    $type,
+			    $product->getKeyValue(),
+			    (string) isset( $image['src'] ) ? $image['src'] : $image['url'],
+			    (int) $image['height'],
+			    (int) $image['width'],
+			    $type,
+			    (string) isset( $image['src'] ) ? $image['src'] : $image['url'],
+			    (int) $image['height'],
+			    (int) $image['width']
+		    );
+		    $amazondb->query( $sql );
+		    if ( ! empty( $amazondb->last_error ) ) {
+			    echo $amazondb->last_error;
+			    throw new \Exception( $amazondb->last_error );
+		    }
+	    }
 
-        $features = $product->getFeature();
-        // Delete stale features.
-        $sql = $amazondb->prepare(
-            "DELETE FROM `wp_amazon_product_features` where DATEDIFF( NOW(), `last_updated` ) > 7",
-            ''
-        );
+	    $features = $product->getFeature();
+	    // Delete stale features.
+	    $sql = $amazondb->prepare(
+		    "DELETE FROM `wp_amazon_product_features` where DATEDIFF( NOW(), `last_updated` ) > 7",
+		    ''
+	    );
 	    $amazondb->query( $sql );
-        if ( ! empty( $amazondb->last_error ) ) {
-            echo $amazondb->last_error;
-            throw new \Exception( $amazondb->last_error );
-        }
-        foreach( $features as $feature ) {
-            $sql = $amazondb->prepare(
-                "INSERT INTO `wp_amazon_product_features` (`keyValue`, `feature`) VALUES ('%s', '%s')
+	    if ( ! empty( $amazondb->last_error ) ) {
+		    echo $amazondb->last_error;
+		    throw new \Exception( $amazondb->last_error );
+	    }
+	    foreach ( $features as $feature ) {
+		    $sql = $amazondb->prepare(
+			    "INSERT INTO `wp_amazon_product_features` (`keyValue`, `feature`) VALUES ('%s', '%s')
  ON DUPLICATE KEY UPDATE `feature` = '%s';",
-                $product->getKeyValue(),
-                $feature,
-                $feature
-            );
-	        $amazondb->query( $sql );
-            if ( ! empty( $amazondb->last_error ) ) {
-                echo $amazondb->last_error;
-                throw new \Exception( $amazondb->last_error );
-            }
-        }
+			    $product->getKeyValue(),
+			    $feature,
+			    $feature
+		    );
+		    $amazondb->query( $sql );
+		    if ( ! empty( $amazondb->last_error ) ) {
+			    echo $amazondb->last_error;
+			    throw new \Exception( $amazondb->last_error );
+		    }
+	    }
 
-        $dimensions = $product->getItemDimensions();
+	    $dimensions = $product->getItemDimensions();
 
-        if (empty($dimensions)) {
-        	$dimensions = array(
-        		'Width'=>'',
-		        'Height'=>'',
-		        'Length'=>'',
-		        'Weight'=>''
-	        );
-        }
+	    if ( empty( $dimensions ) ) {
+		    $dimensions = array(
+			    'Width'  => '',
+			    'Height' => '',
+			    'Length' => '',
+			    'Weight' => ''
+		    );
+	    }
 
 
-        $sql = $amazondb->prepare(
-            "INSERT IGNORE INTO `wp_amazon_item_dimensions` (`keyValue`, `width`, `height`, `depth`, `weight`) VALUES ('%s', '%s', '%s', '%s', '%s');",
-            $product->getKeyValue(),
-	        isset($dimensions['Width'])?$dimensions['Width']:'',
-	        isset($dimensions['Height'])?$dimensions['Height']:'',
-	        isset($dimensions['Length'])?$dimensions['Length']:'',
-            isset($dimensions['Weight'])?$dimensions['Weight']:''
-        );
+	    $sql = $amazondb->prepare(
+		    "INSERT IGNORE INTO `wp_amazon_item_dimensions` (`keyValue`, `width`, `height`, `depth`, `weight`) VALUES ('%s', '%s', '%s', '%s', '%s');",
+		    $product->getKeyValue(),
+		    isset( $dimensions['Width'] ) ? $dimensions['Width'] : '',
+		    isset( $dimensions['Height'] ) ? $dimensions['Height'] : '',
+		    isset( $dimensions['Length'] ) ? $dimensions['Length'] : '',
+		    isset( $dimensions['Weight'] ) ? $dimensions['Weight'] : ''
+	    );
 	    $amazondb->query( $sql );
-        if ( ! empty( $amazondb->last_error ) ) {
-            echo $amazondb->last_error;
-            throw new \Exception( $amazondb->last_error );
-        }
+	    if ( ! empty( $amazondb->last_error ) ) {
+		    echo $amazondb->last_error;
+		    throw new \Exception( $amazondb->last_error );
+	    }
 
-        $categories = $product->getCategories();
-        // Remove records that are more than a month old
-        $sql = $amazondb->prepare(
-            "DELETE FROM `wp_amazon_product_categories` WHERE DATEDIFF( NOW(), `last_updated` ) > 30;",
-            ''
-        );
+	    $categories = $product->getCategories();
+	    // Remove records that are more than a month old
+	    $sql = $amazondb->prepare(
+		    "DELETE FROM `wp_amazon_product_categories` WHERE DATEDIFF( NOW(), `last_updated` ) > 30;",
+		    ''
+	    );
 	    $amazondb->query( $sql );
-        if ( ! empty( $wpdb->last_error ) ) {
-            echo $wpdb->last_error;
-            throw new \Exception( $amazondb->last_error );
-        }
-        foreach( $categories as $category ) {
-            $sql = $amazondb->prepare(
-                "INSERT IGNORE INTO `wp_amazon_product_categories` 
-              (`keyValue`, `categoryID`, `RRF`)
-               VALUES ('%s', '%s', '%s' );",
-                $product->getKeyValue(),
-                $category->get_category_id(),
-                $product->getSalesRank() / $category->get_number_of_items()
-            );
-	        $amazondb->query( $sql );
-            if ( ! empty( $amazondb->last_error ) ) {
-                echo $amazondb->last_error;
-                throw new \Exception( $amazondb->last_error );
-            }
-        }
+	    if ( ! empty( $wpdb->last_error ) ) {
+		    echo $wpdb->last_error;
+		    throw new \Exception( $amazondb->last_error );
+	    }
+
+	    foreach ( $categories as $category ) {
+		    $productIDSafe    = mysqli_real_escape_string( $conn, $id );
+		    $seachIndexSafe   = mysqli_real_escape_string( $conn, $category->get_category_name() );
+		    $searchPhraseSafe = mysqli_real_escape_string( $conn, $category->get_category_name() );
+		    $RRF              = $product->getSalesRank() / $category->get_number_of_items();
+		    $RRFSafe          = mysqli_real_escape_string( $conn, $RRF );
+		    $sql              = "INSERT IGNORE INTO `wp_amazon_product_categories` 
+              (`productID`, `searchPhrase`, `searchIndex`, `RRF`)
+               VALUES ('$productIDSafe', '$searchPhraseSafe', '$seachIndexSafe', '$RRFSafe' );";
+		    $amazondb->query( $sql );
+		    if ( ! empty( $amazondb->last_error ) ) {
+			    echo $amazondb->last_error;
+			    throw new \Exception( $amazondb->last_error );
+		    }
+	    }
 
 
-        $image_sets = $product->getImageSets();
-        // Remove records that are more than a month old
-        $sql = $amazondb->prepare(
-            "DELETE FROM `wp_amazon_product_image_sets` WHERE DATEDIFF( NOW(), `last_updated` ) > 30;",
-            ''
-        );
+	    $image_sets = $product->getImageSets();
+	    // Remove records that are more than a month old
+	    $sql = $amazondb->prepare(
+		    "DELETE FROM `wp_amazon_product_image_sets` WHERE DATEDIFF( NOW(), `last_updated` ) > 30;",
+		    ''
+	    );
 	    $amazondb->query( $sql );
-        if ( ! empty( $amazondb->last_error ) ) {
-            echo $amazondb->last_error;
-            throw new \Exception( $amazondb->last_error );
-        }
-        
-        if ( !empty( $image_sets ) ) {
-            foreach ($image_sets as $image_set) {
+	    if ( ! empty( $amazondb->last_error ) ) {
+		    echo $amazondb->last_error;
+		    throw new \Exception( $amazondb->last_error );
+	    }
 
-            	if (!isset($image_set['swatch'])) {
-		            $image_set['swatch'] = array(
-		                'height'=>'',
-			            'width'=>'',
-			            'url'=>''
-		            );
-	            }
+	    if ( ! empty( $image_sets ) ) {
+		    foreach ( $image_sets as $image_set ) {
 
-	            if (!isset($image_set['hires'])) {
-		            $image_set['hires'] = array(
-			            'height'=>'',
-			            'width'=>'',
-			            'url'=>''
-		            );
-	            }
-                $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+			    if ( ! isset( $image_set['swatch'] ) ) {
+				    $image_set['swatch'] = array(
+					    'height' => '',
+					    'width'  => '',
+					    'url'    => ''
+				    );
+			    }
+
+			    if ( ! isset( $image_set['hires'] ) ) {
+				    $image_set['hires'] = array(
+					    'height' => '',
+					    'width'  => '',
+					    'url'    => ''
+				    );
+			    }
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getKeyValue(),
-                    'swatch',
-                    $image_set['swatch']['height'],
-                    $image_set['swatch']['width'],
-                    $image_set['swatch']['url'],
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    date("Y-m-d H:i:s")
-                );
-	            $amazondb->query($sql);
+				    $product->getKeyValue(),
+				    'swatch',
+				    $image_set['swatch']['height'],
+				    $image_set['swatch']['width'],
+				    $image_set['swatch']['url'],
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    date( "Y-m-d H:i:s" )
+			    );
+			    $amazondb->query( $sql );
 
-	            if (!isset($image_set['small'])) {
-		            $image_set['small'] = array(
-			            'height'=>'',
-			            'width'=>'',
-			            'url'=>''
-		            );
-	            }
+			    if ( ! isset( $image_set['small'] ) ) {
+				    $image_set['small'] = array(
+					    'height' => '',
+					    'width'  => '',
+					    'url'    => ''
+				    );
+			    }
 
-                $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getKeyValue(),
-                    'small',
-                    $image_set['small']['height'],
-                    $image_set['small']['width'],
-                    $image_set['small']['url'],
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    date("Y-m-d H:i:s")
-                );
-	            $amazondb->query($sql);
+				    $product->getKeyValue(),
+				    'small',
+				    $image_set['small']['height'],
+				    $image_set['small']['width'],
+				    $image_set['small']['url'],
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    date( "Y-m-d H:i:s" )
+			    );
+			    $amazondb->query( $sql );
 
-	            if (!isset($image_set['thumb'])) {
-		            $image_set['thumb'] = array(
-			            'height'=>'',
-			            'width'=>'',
-			            'url'=>''
-		            );
-	            }
+			    if ( ! isset( $image_set['thumb'] ) ) {
+				    $image_set['thumb'] = array(
+					    'height' => '',
+					    'width'  => '',
+					    'url'    => ''
+				    );
+			    }
 
-                $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getKeyValue(),
-                    'thumb',
-                    $image_set['thumb']['height'],
-                    $image_set['thumb']['width'],
-                    $image_set['thumb']['url'],
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    date("Y-m-d H:i:s")
-                );
-	            $amazondb->query($sql);
+				    $product->getKeyValue(),
+				    'thumb',
+				    $image_set['thumb']['height'],
+				    $image_set['thumb']['width'],
+				    $image_set['thumb']['url'],
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    date( "Y-m-d H:i:s" )
+			    );
+			    $amazondb->query( $sql );
 
-	            if (!isset($image_set['medium'])) {
-		            $image_set['medium'] = array(
-			            'height'=>'',
-			            'width'=>'',
-			            'url'=>''
-		            );
-	            }
+			    if ( ! isset( $image_set['medium'] ) ) {
+				    $image_set['medium'] = array(
+					    'height' => '',
+					    'width'  => '',
+					    'url'    => ''
+				    );
+			    }
 
-                $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getKeyValue(),
-                    'medium',
-                    $image_set['medium']['height'],
-                    $image_set['medium']['width'],
-                    $image_set['medium']['url'],
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    date("Y-m-d H:i:s")
-                );
-	            $amazondb->query($sql);
+				    $product->getKeyValue(),
+				    'medium',
+				    $image_set['medium']['height'],
+				    $image_set['medium']['width'],
+				    $image_set['medium']['url'],
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    date( "Y-m-d H:i:s" )
+			    );
+			    $amazondb->query( $sql );
 
-	            if (!isset($image_set['tiny'])) {
-		            $image_set['tiny'] = array(
-			            'height'=>'',
-			            'width'=>'',
-			            'url'=>''
-		            );
-	            }
+			    if ( ! isset( $image_set['tiny'] ) ) {
+				    $image_set['tiny'] = array(
+					    'height' => '',
+					    'width'  => '',
+					    'url'    => ''
+				    );
+			    }
 
-                $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getKeyValue(),
-                    'tiny',
-                    $image_set['tiny']['height'],
-                    $image_set['tiny']['width'],
-                    $image_set['tiny']['url'],
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    date("Y-m-d H:i:s")
-                );
-	            $amazondb->query($sql);
+				    $product->getKeyValue(),
+				    'tiny',
+				    $image_set['tiny']['height'],
+				    $image_set['tiny']['width'],
+				    $image_set['tiny']['url'],
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    date( "Y-m-d H:i:s" )
+			    );
+			    $amazondb->query( $sql );
 
-	            if (!isset($image_set['large'])) {
-		            $image_set['large'] = array(
-			            'height'=>'',
-			            'width'=>'',
-			            'url'=>''
-		            );
-	            }
+			    if ( ! isset( $image_set['large'] ) ) {
+				    $image_set['large'] = array(
+					    'height' => '',
+					    'width'  => '',
+					    'url'    => ''
+				    );
+			    }
 
-                $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getKeyValue(),
-                    'large',
-                    $image_set['large']['height'],
-                    $image_set['large']['width'],
-                    $image_set['large']['url'],
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    date("Y-m-d H:i:s")
-                );
-	            $amazondb->query($sql);
+				    $product->getKeyValue(),
+				    'large',
+				    $image_set['large']['height'],
+				    $image_set['large']['width'],
+				    $image_set['large']['url'],
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    date( "Y-m-d H:i:s" )
+			    );
+			    $amazondb->query( $sql );
 
-	            $sql = $amazondb->prepare(
-                    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
+			    $sql = $amazondb->prepare(
+				    "INSERT INTO `wp_amazon_product_image_sets` (`keyValue`, `type`, `height`, `width`, `url`, `last_updated`) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE `height`='%s', `width`='%s', `url` = '%s', `last_updated` = '%s';",
-                    $product->getKeyValue(),
-                    'hires',
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    $image_set['hires']['height'],
-                    $image_set['hires']['width'],
-                    $image_set['hires']['url'],
-                    date("Y-m-d H:i:s")
-                );
-	            $amazondb->query($sql);
+				    $product->getKeyValue(),
+				    'hires',
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    $image_set['hires']['height'],
+				    $image_set['hires']['width'],
+				    $image_set['hires']['url'],
+				    date( "Y-m-d H:i:s" )
+			    );
+			    $amazondb->query( $sql );
 
-                if (!empty($amazondb->last_error)) {
-                    echo $amazondb->last_error;
-                    throw new \Exception($amazondb->last_error);
-                }
+			    if ( ! empty( $amazondb->last_error ) ) {
+				    echo $amazondb->last_error;
+				    throw new \Exception( $amazondb->last_error );
+			    }
 
-            } // for each image set
-            // var_dump('jjjj');
-            //die();
+		    } // for each image set
+		    // var_dump('jjjj');
+		    //die();
 
 
-            $pd = AmazonCache::getProduct($product->getKeyValue());
-            //var_dump( $pd );
-            //die();
-        }
+		    $pd = AmazonCache::getProduct( $product->getKeyValue() );
+		    //var_dump( $pd );
+		    //die();
+	    }
 
-        return true;
+	    if ( ! empty( $id ) ) {
+		    $product->id = $id;
+	    }
+
+
+	    return $product;
     }
 
     public static function getKeywords( $phrase, $rrf, $depth) {

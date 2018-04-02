@@ -41,107 +41,100 @@ class AmazonProductSearch implements IAmazonProductSearch
 
 	}
 
-    public static function search( $searchTerm, $to, $sortFn, $filterFn, $relationshipType = '', $searchIndex =' All', $search = null, $from = null, $endPoint = 'webservices.amazon.com', $uri = '/onca/xml')
+    public static function search( $searchTerm, $to, $sortFn, $filterFn, $relationshipType = '', $searchIndex =' All', $search = null, $from = null, $endPoint = 'webservices.amazon.com', $uri = '/onca/xml', $groups = array())
     {
-    	// @todo
-		//$data = get_transient('searchresults' . $searchTerm . $to . $relationshipType . $searchIndex . get_class($search) );
-		$data = false;
-		if ( $data == false || count( $data ) < 40  ) {
 
-			$groups = array('Large', 'Accessories', 'BrowseNodes', 'Images', 'ItemAttributes', 'SalesRank', 'Similarities', 'Variations', 'SalesRank', 'OfferFull', 'EditorialReview');
+	    $search = empty($search) ? new Search() : $search;
 
 
-			$search = empty($search) ? new Search() : $search;
+	    global $conn;
+    	$transient = new Transient($conn);
+		$data = $transient->fetch('searchresults' . $searchTerm . $to . $relationshipType . $searchIndex . get_class($search) );
+
+
+		if ( empty($data) || $data == false || count( $data ) < 40  ) {
+
+			if (empty($groups)) {
+				$groups = array(
+					'Large',
+					'Accessories',
+					'BrowseNodes',
+					'Images',
+					'ItemAttributes',
+					'SalesRank',
+					'Similarities',
+					'Variations',
+					'SalesRank',
+					'OfferFull',
+					'EditorialReview'
+				);
+
+			}
+
 			$conf = new GenericConfiguration();
 
 			// Save search term as keyword - this also caches the keyword
-			// @todo
-			//$phrases = get_transient('phrasessearch' .$searchTerm);
-			$phrases = false;
+			$phrases = $transient->fetch( 'phrasessearch' . $searchTerm );
 
-			if ($phrases == false) {
-				$phrase_tree_array = AmazonKeywordsTool::fetch($searchTerm, '');
-				$phrases = AmazonProductSearch::get_phrases(array(), $phrase_tree_array);
-				// @todo
-				//set_transient('phrasessearch' .$searchTerm, $phrases, 3600 * 24 * 7 ); // Cache for seven days.
+			//$phrases = false;
+
+			if ( ! empty( $searchTerm ) ) {
+				if ( $phrases == false ) {
+					$phrase_tree_array = AmazonKeywordsTool::fetch( $searchTerm, '' );
+					$phrases           = AmazonProductSearch::get_phrases( array(), $phrase_tree_array );
+					$transient->save( 'phrasessearch' . $searchTerm, $phrases, 3600 * 24 * 7 ); // Cache for seven days.
+				}
+				$phrases = array_slice( $phrases, 0, 1 );
 			}
 
-			$phrases = array_slice( $phrases, 0, 1 );
 
 			$products_found = array();
 
-			$amazon_accounts = AmazonSettings::amazon_accounts()->value();
+			$amazon_accounts   = AmazonSettings::amazon_accounts()->value();
 			$aws_access_key_id = $amazon_accounts[0]['amazon_access_key_id'];
-			$aws_secret_key = $amazon_accounts[0]['amazon_secret_access_key'];
-			$affiliate_tag = $amazon_accounts[0]['amazon_affiliate_link'];
+			$aws_secret_key    = $amazon_accounts[0]['amazon_secret_access_key'];
+			$affiliate_tag     = $amazon_accounts[0]['amazon_affiliate_link'];
 
-			$client = new \GuzzleHttp\Client();
-			$request = new \ApaiIO\Request\GuzzleRequest($client);
+			$client  = new \GuzzleHttp\Client();
+			$request = new \ApaiIO\Request\GuzzleRequest( $client );
 
 			$conf
-				->setCountry('com')
-				->setAccessKey($aws_access_key_id)
-				->setSecretKey($aws_secret_key)
-				->setAssociateTag($affiliate_tag)
-				->setRequest($request);
-			$apaiIO = new ApaiIO($conf);
+				->setCountry( 'com' )
+				->setAccessKey( $aws_access_key_id )
+				->setSecretKey( $aws_secret_key )
+				->setAssociateTag( $affiliate_tag )
+				->setRequest( $request );
+			$apaiIO = new ApaiIO( $conf );
 
-			$search->setCategory($searchIndex);
 
-			// Relationship types: Episode, Season, Tracks, and Variation (http://docs.aws.amazon.com/AWSECommerceService/latest/DG/Motivating_RelatedItems.html#RelationshipTypes)
-			if ($relationshipType != '' && !empty($relationshipType)) {
-				$groups[] = 'RelatedItems';
-				$search->setRelationshipType($relationshipType);
+			if ( ! empty( $searchIndex ) ) { // category
+				$search->setCategory( $searchIndex );
 			}
 
-			$search->setResponseGroup($groups);
+			// Relationship types: Episode, Season, Tracks, and Variation (http://docs.aws.amazon.com/AWSECommerceService/latest/DG/Motivating_RelatedItems.html#RelationshipTypes)
+			if ( $relationshipType != '' && ! empty( $relationshipType ) ) {
+				$groups[] = 'RelatedItems';
+				$search->setRelationshipType( $relationshipType );
+			}
+
+			$search->setResponseGroup( $groups );
+
+			$results = array();
 
 
-			foreach ($phrases as $phrase) {
+			if ( ! $phrases || empty( $phrases ) ) {
 
-				//var_dump($phrase);
-				//die();
+				$res            = AmazonProductSearch::doSearch( $searchIndex, $search, $products_found, $apaiIO, $searchIndex, $to, $relationshipType );
+				$products_found = $res[0];
+				$results        = $res[1];
 
-				try {
-					// Look in database
-					$products = AmazonCache::performCachedSearch((string)$phrase, get_class($search));
-					AmazonCache::cacheSearch((string) $phrase, $products, get_class($search));
-					$products_found = array_merge($products_found, $products);
-					throw new \Exception('testing');
-				} catch (\Exception $e) {
+			} else {
 
-					// @todo
-					// $search_results_xml = get_transient('searchresultsxml' . $to . $relationshipType . $phrase . get_class($search));
-					$search_results_xml = false;
+				foreach ( $phrases as $phrase ) {
 
-					if (!empty($search_results_xml)) {
-						// header( 'Content-Type:application/xml' );
-						//echo $search_results_xml;
-						//die();
-						// Parse results.
-						//$parser = new AmazonParser();
-						//$results = $parser->parse_search_results($search_results_xml);
-					} else{
-						$search->setKeywords($phrase);
-						$search_results_xml = $apaiIO->runOperation($search);
-					}
-
-					//header( 'Content-Type:application/xml' );
-					//echo $search_results_xml;
-					//die();
-
-					//Parse results.
-					$parser = new AmazonParser();
-					$results = $parser->parse_search_results($search_results_xml);
-
-					if( isset($results['items'])) {
-						AmazonCache::cacheSearch((string)$phrase, $results['items'], get_class($search));
-						$products_found = array_merge($products_found, $results['items']);
-						//	set_transient('searchresultsxml' . $to . $relationshipType . $phrase . get_class($search), $search_results_xml, 3600 * 24); // Cache for one day.
-					}
-
-					// @todo
-				//	set_transient('searchresults' . $phrase . $to . $relationshipType . $searchIndex . get_class($search), $results['items'], 3600 * 24 ); // Cache for one day.
+					$res            = AmazonProductSearch::doSearch( $phrase, $search, $products_found, $apaiIO, $searchIndex, $to, $relationshipType );
+					$products_found = $res[0];
+					$results        = $res[1];
 
 				}
 
@@ -149,8 +142,7 @@ class AmazonProductSearch implements IAmazonProductSearch
 
 			$data = $products_found;
 
-		// @todo
-		//	set_transient('searchresults' . $searchTerm . $to . $relationshipType . $searchIndex . get_class($search), $results['items'], 3600 * 24 ); // Cache for one day.
+			$transient->save( 'searchresults' . $searchTerm . $to . $relationshipType . $searchIndex . get_class( $search ), $results['items'], 3600 * 24 ); // Cache for one day.
 
 		}
 
@@ -163,6 +155,56 @@ class AmazonProductSearch implements IAmazonProductSearch
 
     }
 
+    private static function doSearch($phrase, $search, $products_found, $apaiIO, $searchIndex, $to, $relationshipType) {
+
+		// $phrase can also be the category;
+	    $parser  = new AmazonParser();
+	    global $conn;
+
+	    try {
+		    // Look in database
+		    $products = AmazonCache::performCachedSearch( (string) $phrase, (string) $searchIndex );
+		    if (empty($products["items"])) {
+			    throw new \Exception( 'No products found' );
+		    }
+		  //  AmazonCache::cacheSearch( (string) $phrase, $products, (string) $searchIndex );
+		    $products_found = array_merge( $products_found, $products );
+			$results["items"] = $products_found;
+		   //  throw new \Exception( 'testing' );
+	    } catch ( \Exception $e ) {
+
+
+		  //  $transient = new Transient($conn);
+		    // 'searchresultsxml1ApparelApaiIO\Operations\Search'
+		   // var_dump('searchresultsxml' . $to . $relationshipType . $phrase . get_class($search));
+		   //die();
+
+		 //   $search_results_xml = $transient->fetch('searchresultsxml' . $to . $relationshipType . $phrase);
+
+
+		//    $search_results_xml = false;
+
+
+		    $search->setKeywords( $phrase );
+		    $search->setPage(1);
+		    $search_results_xml = $apaiIO->runOperation( $search );
+
+		    //Parse results.
+		    $results = $parser->parse_search_results( $search_results_xml );
+
+		    if ( isset( $results['items'] ) ) {
+			    AmazonCache::cacheSearch( (string) $phrase, $results['items'], $searchIndex );
+			    $products_found = array_merge( $products_found, $results['items'] );
+		    }
+
+
+	    }
+
+
+	    return array($products_found, $results);
+
+    }
+
 
     public static function itemSearch( $keyValue, $keyType, $relationshipType='', $endPoint = 'webservices.amazon.com', $uri = '/onca/xml', $retry = true )
 	{
@@ -170,8 +212,8 @@ class AmazonProductSearch implements IAmazonProductSearch
 		global $conn;
 		global $options;
 
-
 		$transient = new Transient($conn);
+
 		$search_results_xml = $transient->fetch('itemsearchresultsxml' . $keyValue .  $relationshipType);
 
 
@@ -180,18 +222,25 @@ class AmazonProductSearch implements IAmazonProductSearch
 			$parser = new AmazonParser();
 			$results = $parser->parse_item_search_results($search_results_xml, $keyType);
 			$product = $results['items'][0];
-			$related_products = array();
 
-			AmazonCache::cacheProduct($product, $relationshipType, $related_products);
+			// Check if product already in database
+			try {
+				$product = AmazonCache::getProduct( $keyValue, $relationshipType );
+			} catch(\Exception $e) {
+				$related_products = array();
+				$product          = AmazonCache::cacheProduct( $product, $relationshipType, $related_products );
+			}
 
 		} else {
 
 			try {
+
 				if ($options['cache']) {
 					$product = AmazonCache::getProduct( $keyValue, $relationshipType );
 				} else {
 					throw new \Exception("No caching");
 				}
+
 			} catch (\Exception $e) {
 
 
@@ -229,11 +278,8 @@ class AmazonProductSearch implements IAmazonProductSearch
 
 				try {
 					$search_results_xml = $apaiIO->runOperation( $lookup );
-					//echo $search_results_xml;
-					//die("hello");
 				} catch(\Exception $e) {
 
-					//die("bye");
 					if ($retry) {
 						// Retry after 5 seconds
 						sleep(5);
@@ -241,29 +287,28 @@ class AmazonProductSearch implements IAmazonProductSearch
 							$keyType = "UPC";
 						}
 						if ($keyType == "SKU") {
-							$keyType = "ASIN";
+							$keyType = "UPC";
 						}
 						return AmazonProductSearch::itemSearch( $keyValue, $keyType, $relationshipType, $endPoint, $uri, false);
 					} else {
 						return false;
 					}
 				}
-				//header( 'Content-Type:application/xml' );
+
 
 				// Parse results.
 				$parser = new AmazonParser();
 
+
 				try {
 					$results = $parser->parse_item_search_results( $search_results_xml, $keyType );
 				} catch(\Exception $e) {
-					if ($keyType == "EAN") {
-						$keyType = "UPC";
-					}
-					elseif ($keyType == "UPC") {
+
+					if ($keyType == "UPC") {
 						$keyType = "EAN";
 					}
 					elseif ($keyType == "SKU") {
-						$keyType = "ASIN";
+						$keyType = "UPC";
 					}
 					return AmazonProductSearch::itemSearch( $keyValue, $keyType, $relationshipType, $endPoint, $uri, false);
 				}
@@ -272,11 +317,11 @@ class AmazonProductSearch implements IAmazonProductSearch
 					if ($retry) {
 						// Retry after 5 seconds
 						sleep(5);
-						if ($keyType == "EAN") {
-							$keyType = "UPC";
+						if ($keyType == "UPC") {
+							$keyType = "EAN";
 						}
 						if ($keyType == "SKU") {
-							$keyType = "ASIN";
+							$keyType = "UPC";
 						}
 						return AmazonProductSearch::itemSearch( $keyValue, $keyType, $relationshipType, $endPoint, $uri, false);
 					} else {
